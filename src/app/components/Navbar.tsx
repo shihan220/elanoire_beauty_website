@@ -4,10 +4,12 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ShoppingBag, Search, User, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useCart } from './cart/CartProvider';
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { totalItems } = useCart();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -56,10 +58,14 @@ export function Navbar() {
             <Link href="/sign-in" aria-label="Account sign in" className="hidden md:block p-2 text-stone-900 hover:text-stone-500 transition-colors">
               <User size={20} strokeWidth={1.5} />
             </Link>
-            <button className="p-2 text-stone-900 hover:text-stone-500 transition-colors relative">
+            <Link href="/cart" aria-label="Shopping bag" className="p-2 text-stone-900 hover:text-stone-500 transition-colors relative">
               <ShoppingBag size={20} strokeWidth={1.5} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-stone-900 rounded-full"></span>
-            </button>
+              {totalItems > 0 ? (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-stone-900 text-[#faf9f6] text-[10px] leading-5 text-center rounded-full">
+                  {totalItems}
+                </span>
+              ) : null}
+            </Link>
           </div>
         </div>
       </motion.header>
