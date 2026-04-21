@@ -1,10 +1,32 @@
 import { NextResponse } from 'next/server';
+import { OrderStatus } from '@prisma/client';
 import { getCurrentSession } from '@/server/auth';
 import { prisma } from '@/server/db';
 import { getAppUrl, getStripe } from '@/server/stripe';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unknown checkout error';
+}
+
+async function cancelPendingOrder(orderId: string) {
+  try {
+    await prisma.order.updateMany({
+      where: {
+        id: orderId,
+        status: OrderStatus.PENDING,
+      },
+      data: { status: OrderStatus.CANCELLED },
+    });
+  } catch (error) {
+    console.error('Failed to cancel pending checkout order.', {
+      orderId,
+      error: getErrorMessage(error),
+    });
+  }
+}
 
 export async function POST() {
   const session = await getCurrentSession();
@@ -30,6 +52,22 @@ export async function POST() {
 
   if (cartItems.length === 0) {
     return NextResponse.json({ message: 'Your bag is empty.' }, { status: 400 });
+  }
+
+  const invalidCartItems = cartItems.filter(
+    (item) => item.quantity < 1 || item.quantity > 9 || !item.product.active,
+  );
+
+  if (invalidCartItems.length > 0) {
+    console.warn('Checkout blocked because the persisted cart contains invalid items.', {
+      userId: session.user.id,
+      invalidItemCount: invalidCartItems.length,
+    });
+
+    return NextResponse.json(
+      { message: 'Please refresh your bag before checkout.' },
+      { status: 409 },
+    );
   }
 
   const subtotalPence = cartItems.reduce(
@@ -75,8 +113,16 @@ export async function POST() {
         orderId: order.id,
         userId: session.user.id,
       },
+      payment_intent_data: {
+        metadata: {
+          orderId: order.id,
+          userId: session.user.id,
+        },
+      },
       success_url: `${appUrl}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/cart?checkout=cancelled`,
+    }, {
+      idempotencyKey: `checkout-session:${order.id}`,
     });
 
     await prisma.order.update({
@@ -89,11 +135,14 @@ export async function POST() {
     }
 
     return NextResponse.json({ url: checkoutSession.url });
-  } catch {
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { status: 'CANCELLED' },
+  } catch (error) {
+    console.error('Stripe checkout session creation failed.', {
+      userId: session.user.id,
+      orderId: order.id,
+      error: getErrorMessage(error),
     });
+
+    await cancelPendingOrder(order.id);
 
     return NextResponse.json(
       { message: 'Checkout could not be started. Please try again.' },

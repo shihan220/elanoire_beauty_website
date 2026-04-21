@@ -61,6 +61,12 @@ Connected:
 - Stripe Checkout metadata links the payment session to the order and user.
 - `POST /api/stripe/webhook` verifies Stripe signatures, marks completed checkout sessions as paid, and clears the authenticated cart.
 - Expired Stripe checkout sessions mark pending orders as cancelled.
+- Checkout pricing is calculated from persisted product prices only, never from client-submitted amounts.
+- Webhook processing is repeat-safe by using the unique Stripe Checkout session id and status-constrained updates.
+
+Local validation:
+
+- Follow `docs/stripe-test-mode.md` for the signed-in Stripe test checkout and expired-session test flow.
 
 Required environment:
 
