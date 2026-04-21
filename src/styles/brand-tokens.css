@@ -1,0 +1,12 @@
+:root {
+  --elanoire-color-ivory: #faf9f6;
+  --elanoire-color-white: #ffffff;
+  --elanoire-color-ink: #030213;
+  --elanoire-color-muted: #ececf0;
+  --elanoire-color-muted-foreground: #717182;
+  --elanoire-color-accent: #e9ebef;
+  --elanoire-color-destructive: #d4183d;
+  --elanoire-color-input-background: #f3f3f5;
+  --elanoire-color-switch-background: #cbced4;
+  --elanoire-border-soft: rgba(0, 0, 0, 0.1);
+}
