@@ -1,25 +1,51 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowRight, Check, Eye, EyeOff } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
 type Errors = Record<string, string>;
+type ApiErrors = Record<string, string | string[]>;
+type AuthStep = 'details' | 'code';
 
 type TextFieldProps = {
   id: string;
   label: string;
   type?: string;
   autoComplete?: string;
+  inputMode?: 'email' | 'numeric' | 'search' | 'text';
+  maxLength?: number;
+  showPasswordToggle?: boolean;
   value: string;
   error?: string;
   onChange: (value: string) => void;
 };
 
+const minimumPasswordLength = 8;
+
 function isEmail(value: string) {
   return /\S+@\S+\.\S+/.test(value);
+}
+
+async function readJson(response: Response) {
+  return response.json().catch(() => ({})) as Promise<{
+    message?: string;
+    errors?: ApiErrors;
+    challengeId?: string;
+    devCode?: string;
+  }>;
+}
+
+function normaliseErrors(errors?: ApiErrors) {
+  if (!errors) return {};
+
+  return Object.entries(errors).reduce<Errors>((normalisedErrors, [key, value]) => {
+    normalisedErrors[key] = Array.isArray(value) ? value[0] : value;
+
+    return normalisedErrors;
+  }, {});
 }
 
 function TextField({
@@ -27,25 +53,51 @@ function TextField({
   label,
   type = 'text',
   autoComplete,
+  inputMode,
+  maxLength,
+  showPasswordToggle = false,
   value,
   error,
   onChange,
 }: TextFieldProps) {
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const inputType = showPasswordToggle && isPasswordVisible ? 'text' : type;
+
   return (
     <div>
       <label htmlFor={id} className="text-xs tracking-[0.2em] uppercase text-stone-500 mb-3 block">
         {label}
       </label>
-      <input
-        id={id}
-        type={type}
-        autoComplete={autoComplete}
-        value={value}
-        aria-invalid={Boolean(error)}
-        aria-describedby={error ? `${id}-error` : undefined}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full bg-transparent border-0 border-b border-stone-300 px-0 py-4 text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-900 transition-colors"
-      />
+      <div className="relative">
+        <input
+          id={id}
+          type={inputType}
+          autoComplete={autoComplete}
+          inputMode={inputMode}
+          maxLength={maxLength}
+          value={value}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${id}-error` : undefined}
+          onChange={(event) => onChange(event.target.value)}
+          className={`w-full bg-transparent border-0 border-b border-stone-300 px-0 py-4 text-stone-900 placeholder:text-stone-400 outline-none focus:border-stone-900 transition-colors ${
+            showPasswordToggle ? 'pr-12' : ''
+          }`}
+        />
+        {showPasswordToggle ? (
+          <button
+            type="button"
+            aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
+            onClick={() => setIsPasswordVisible((currentValue) => !currentValue)}
+            className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-stone-500 hover:text-stone-900 transition-colors"
+          >
+            {isPasswordVisible ? (
+              <EyeOff size={18} strokeWidth={1.5} />
+            ) : (
+              <Eye size={18} strokeWidth={1.5} />
+            )}
+          </button>
+        ) : null}
+      </div>
       {error ? (
         <p id={`${id}-error`} className="mt-3 text-sm text-[var(--elanoire-color-destructive)]">
           {error}
@@ -55,11 +107,12 @@ function TextField({
   );
 }
 
-function SubmitButton({ children }: { children: React.ReactNode }) {
+function SubmitButton({ children, disabled = false }: { children: React.ReactNode; disabled?: boolean }) {
   return (
     <button
       type="submit"
-      className="w-full bg-stone-900 text-[#faf9f6] py-4 px-8 flex items-center justify-center gap-3 text-sm tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors"
+      disabled={disabled}
+      className="w-full bg-stone-900 text-[#faf9f6] py-4 px-8 flex items-center justify-center gap-3 text-sm tracking-[0.2em] uppercase hover:bg-stone-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
     >
       {children}
       <ArrowRight size={16} strokeWidth={1.5} />
@@ -90,10 +143,29 @@ function FormError({ message }: { message?: string }) {
   );
 }
 
+function CodeNotice({ devCode }: { devCode?: string }) {
+  return (
+    <div className="border border-stone-300 bg-[#faf9f6] p-6">
+      <p className="text-sm leading-relaxed text-stone-600">
+        Enter the six-digit verification code sent for this account.
+      </p>
+      {devCode ? (
+        <p className="mt-4 text-xs tracking-[0.2em] uppercase text-stone-500">
+          Development Code: {devCode}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function SignInForm() {
   const router = useRouter();
+  const [step, setStep] = useState<AuthStep>('details');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [challengeId, setChallengeId] = useState('');
+  const [devCode, setDevCode] = useState('');
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -104,7 +176,10 @@ export function SignInForm() {
     const nextErrors: Errors = {};
 
     if (!isEmail(email)) nextErrors.email = 'Enter a valid email address.';
-    if (!password) nextErrors.password = 'Enter your password.';
+    if (password.length < minimumPasswordLength) nextErrors.password = 'Use at least 8 characters.';
+    if (step === 'code' && code.trim().length !== 6) {
+      nextErrors.code = 'Enter the six-digit verification code.';
+    }
 
     setErrors(nextErrors);
     setFormError('');
@@ -113,9 +188,40 @@ export function SignInForm() {
 
     setIsSubmitting(true);
 
+    if (step === 'details') {
+      const response = await fetch('/api/auth/sign-in/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+      const data = await readJson(response);
+
+      setIsSubmitting(false);
+
+      if (!response.ok || !data.challengeId) {
+        setFormError(data.message ?? 'We could not sign you in with those details.');
+        setErrors(normaliseErrors(data.errors));
+        return;
+      }
+
+      setChallengeId(data.challengeId);
+      setDevCode(data.devCode ?? '');
+      setCode('');
+      setStep('code');
+      return;
+    }
+
     const result = await signIn('credentials', {
       email,
       password,
+      challengeId,
+      code,
+      flow: 'signin',
       redirect: false,
     });
 
@@ -154,7 +260,23 @@ export function SignInForm() {
         value={password}
         error={errors.password}
         onChange={setPassword}
+        showPasswordToggle
       />
+      {step === 'code' ? (
+        <>
+          <CodeNotice devCode={devCode} />
+          <TextField
+            id="signin-code"
+            label="Verification code"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            maxLength={6}
+            value={code}
+            error={errors.code}
+            onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
+          />
+        </>
+      ) : null}
       <div className="flex items-center justify-between gap-6">
         <label className="flex items-center gap-3 text-sm text-stone-600">
           <input type="checkbox" className="h-4 w-4 accent-stone-900" />
@@ -164,17 +286,23 @@ export function SignInForm() {
           Forgot password
         </Link>
       </div>
-      <SubmitButton>{isSubmitting ? 'Signing In' : 'Sign In'}</SubmitButton>
+      <SubmitButton disabled={isSubmitting}>
+        {isSubmitting ? 'Submitting' : step === 'code' ? 'Verify Sign In' : 'Continue'}
+      </SubmitButton>
     </form>
   );
 }
 
 export function SignUpForm() {
   const router = useRouter();
+  const [step, setStep] = useState<AuthStep>('details');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [challengeId, setChallengeId] = useState('');
+  const [devCode, setDevCode] = useState('');
   const [acceptsTerms, setAcceptsTerms] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState('');
@@ -188,8 +316,11 @@ export function SignUpForm() {
     if (!firstName.trim()) nextErrors.firstName = 'Enter your first name.';
     if (!lastName.trim()) nextErrors.lastName = 'Enter your last name.';
     if (!isEmail(email)) nextErrors.email = 'Enter a valid email address.';
-    if (password.length < 8) nextErrors.password = 'Use at least 8 characters.';
+    if (password.length < minimumPasswordLength) nextErrors.password = 'Use at least 8 characters.';
     if (!acceptsTerms) nextErrors.terms = 'Confirm you accept the account terms.';
+    if (step === 'code' && code.trim().length !== 6) {
+      nextErrors.code = 'Enter the six-digit verification code.';
+    }
 
     setErrors(nextErrors);
     setFormError('');
@@ -198,37 +329,49 @@ export function SignUpForm() {
 
     setIsSubmitting(true);
 
-    const response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        firstName,
-        lastName,
-        email,
-        password,
-      }),
-    });
+    if (step === 'details') {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          password,
+        }),
+      });
+      const data = await readJson(response);
 
-    if (!response.ok) {
-      const data = (await response.json()) as { message?: string; errors?: Errors };
-      setFormError(data.message ?? 'We could not create your account.');
-      setErrors(data.errors ?? {});
       setIsSubmitting(false);
+
+      if (!response.ok || !data.challengeId) {
+        setFormError(data.message ?? 'We could not create your account.');
+        setErrors(normaliseErrors(data.errors));
+        return;
+      }
+
+      setChallengeId(data.challengeId);
+      setDevCode(data.devCode ?? '');
+      setCode('');
+      setStep('code');
       return;
     }
 
     const signInResult = await signIn('credentials', {
       email,
       password,
+      challengeId,
+      code,
+      flow: 'signup',
       redirect: false,
     });
 
     setIsSubmitting(false);
 
     if (signInResult?.error) {
-      setFormError('Your account was created, but we could not start a session.');
+      setFormError('We could not verify that code. Request a new code and try again.');
       return;
     }
 
@@ -248,7 +391,22 @@ export function SignUpForm() {
         <TextField id="lastName" label="Last name" autoComplete="family-name" value={lastName} error={errors.lastName} onChange={setLastName} />
       </div>
       <TextField id="email" label="Email address" type="email" autoComplete="email" value={email} error={errors.email} onChange={setEmail} />
-      <TextField id="password" label="Password" type="password" autoComplete="new-password" value={password} error={errors.password} onChange={setPassword} />
+      <TextField id="password" label="Password" type="password" autoComplete="new-password" value={password} error={errors.password} onChange={setPassword} showPasswordToggle />
+      {step === 'code' ? (
+        <>
+          <CodeNotice devCode={devCode} />
+          <TextField
+            id="signup-code"
+            label="Verification code"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            maxLength={6}
+            value={code}
+            error={errors.code}
+            onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
+          />
+        </>
+      ) : null}
       <div>
         <label className="flex items-start gap-3 text-sm text-stone-600 leading-relaxed">
           <input
@@ -263,7 +421,9 @@ export function SignUpForm() {
           <p className="mt-3 text-sm text-[var(--elanoire-color-destructive)]">{errors.terms}</p>
         ) : null}
       </div>
-      <SubmitButton>{isSubmitting ? 'Creating Account' : 'Create Account'}</SubmitButton>
+      <SubmitButton disabled={isSubmitting}>
+        {isSubmitting ? 'Submitting' : step === 'code' ? 'Verify Account' : 'Create Account'}
+      </SubmitButton>
     </form>
   );
 }

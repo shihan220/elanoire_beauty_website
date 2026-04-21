@@ -7,21 +7,29 @@ Connected:
 - Prisma schema for users, products, carts, addresses, orders, and order items.
 - PostgreSQL datasource via `DATABASE_URL`.
 - Seed script for the current product catalogue.
-- NextAuth credentials provider with bcrypt password verification.
+- NextAuth credentials provider with Argon2id password verification and legacy bcrypt support.
 - Registration API at `POST /api/auth/register`.
 - Protected account page using the authenticated session.
 - Account API backed by the authenticated user record.
+- Two-step account creation and sign-in using database-backed verification codes.
+- New password hashes use Argon2id, with legacy bcrypt verification kept for existing accounts.
 
 Required environment:
 
 - `DATABASE_URL`
 - `NEXTAUTH_URL`
 - `NEXTAUTH_SECRET`
+- `AUTH_EMAIL_FROM`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
 
 Remaining blockers:
 
 - A real PostgreSQL/Supabase database URL is required before registration and sign-in can persist live users.
-- Email reset delivery is still a muted placeholder until an email provider is selected.
+- SMTP email configuration is required before production users can receive two-step verification codes.
+- Email reset delivery is still a muted placeholder until the same email provider is connected to password reset.
 - Product pages still use static data until the next product-database milestone.
 
 ## Milestone 2: Database-Backed Product Reads
