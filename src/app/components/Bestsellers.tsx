@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
+import Link from 'next/link';
 import { motion, useScroll, useTransform } from 'motion/react';
 import { ShoppingBag } from 'lucide-react';
 import { featuredProducts } from '@/data/products';
@@ -17,7 +18,7 @@ export function Bestsellers() {
   });
 
   return (
-    <section ref={containerRef} className="py-24 md:py-32 bg-stone-100 overflow-hidden relative" style={{ position: 'relative' }}>
+    <section id="collection" ref={containerRef} className="py-24 md:py-32 bg-stone-100 overflow-hidden relative" style={{ position: 'relative' }}>
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-8">
           <div>
@@ -28,9 +29,9 @@ export function Bestsellers() {
               The Collection
             </h2>
           </div>
-          <a href="#" className="text-sm tracking-[0.2em] uppercase text-stone-900 border-b border-stone-900 pb-1 hover:text-stone-500 hover:border-stone-500 transition-colors inline-block w-max">
+          <Link href="/products" className="text-sm tracking-[0.2em] uppercase text-stone-900 border-b border-stone-900 pb-1 hover:text-stone-500 hover:border-stone-500 transition-colors inline-block w-max">
             View All Products
-          </a>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12 pb-24">

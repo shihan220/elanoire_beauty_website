@@ -1,9 +1,10 @@
 import React from 'react';
+import Link from 'next/link';
 import { Instagram, Twitter, Facebook, ArrowRight } from 'lucide-react';
 
 export function Footer() {
   return (
-    <footer className="bg-stone-100 py-24 border-t border-stone-200">
+    <footer id="contact" className="bg-stone-100 py-24 border-t border-stone-200">
       <div className="max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-4 gap-16 md:gap-8">
         <div className="md:col-span-2">
           <h2 className="text-3xl font-serif text-stone-900 mb-2">ÉLANOIRE</h2>
@@ -30,22 +31,22 @@ export function Footer() {
         <div>
           <h3 className="text-xs tracking-[0.2em] uppercase text-stone-900 font-medium mb-8">Shop</h3>
           <ul className="flex flex-col gap-4 text-sm text-stone-600">
-            <li><a href="#" className="hover:text-stone-900 transition-colors">All Products</a></li>
-            <li><a href="#" className="hover:text-stone-900 transition-colors">Skincare</a></li>
-            <li><a href="#" className="hover:text-stone-900 transition-colors">Makeup</a></li>
-            <li><a href="#" className="hover:text-stone-900 transition-colors">Gifts & Sets</a></li>
-            <li><a href="#" className="hover:text-stone-900 transition-colors">Bestsellers</a></li>
+            <li><Link href="/products" className="hover:text-stone-900 transition-colors">All Products</Link></li>
+            <li><Link href="/skincare" className="hover:text-stone-900 transition-colors">Skincare</Link></li>
+            <li><Link href="/makeup" className="hover:text-stone-900 transition-colors">Makeup</Link></li>
+            <li><span className="text-stone-400">Gifts & Sets</span></li>
+            <li><Link href="/#collection" className="hover:text-stone-900 transition-colors">Bestsellers</Link></li>
           </ul>
         </div>
 
         <div>
           <h3 className="text-xs tracking-[0.2em] uppercase text-stone-900 font-medium mb-8">About</h3>
           <ul className="flex flex-col gap-4 text-sm text-stone-600">
-            <li><a href="#" className="hover:text-stone-900 transition-colors">Our Story</a></li>
-            <li><a href="#" className="hover:text-stone-900 transition-colors">Ingredients</a></li>
-            <li><a href="#" className="hover:text-stone-900 transition-colors">Sustainability</a></li>
-            <li><a href="#" className="hover:text-stone-900 transition-colors">Contact</a></li>
-            <li><a href="#" className="hover:text-stone-900 transition-colors">FAQ</a></li>
+            <li><Link href="/#philosophy" className="hover:text-stone-900 transition-colors">Our Story</Link></li>
+            <li><span className="text-stone-400">Ingredients</span></li>
+            <li><span className="text-stone-400">Sustainability</span></li>
+            <li><Link href="/#contact" className="hover:text-stone-900 transition-colors">Contact</Link></li>
+            <li><span className="text-stone-400">FAQ</span></li>
           </ul>
         </div>
       </div>

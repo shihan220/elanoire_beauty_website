@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { motion } from 'motion/react';
 
 export function Hero() {
@@ -38,12 +39,12 @@ export function Hero() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-6">
-            <button className="px-10 py-4 bg-[#faf9f6] text-stone-900 text-sm tracking-[0.2em] uppercase hover:bg-stone-200 transition-colors">
+            <Link href="/skincare" className="px-10 py-4 bg-[#faf9f6] text-stone-900 text-sm tracking-[0.2em] uppercase hover:bg-stone-200 transition-colors">
               Shop Skincare
-            </button>
-            <button className="px-10 py-4 border border-[#faf9f6] text-[#faf9f6] text-sm tracking-[0.2em] uppercase hover:bg-[#faf9f6] hover:text-stone-900 transition-colors backdrop-blur-sm">
+            </Link>
+            <Link href="/makeup" className="px-10 py-4 border border-[#faf9f6] text-[#faf9f6] text-sm tracking-[0.2em] uppercase hover:bg-[#faf9f6] hover:text-stone-900 transition-colors backdrop-blur-sm">
               Explore Makeup
-            </button>
+            </Link>
           </div>
         </motion.div>
       </div>

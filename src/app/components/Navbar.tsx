@@ -40,10 +40,10 @@ export function Navbar() {
           </div>
 
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Shop</a>
-            <a href="#" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Skincare</a>
-            <a href="#" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Makeup</a>
-            <a href="#" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">About</a>
+            <Link href="/products" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Shop</Link>
+            <Link href="/skincare" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Skincare</Link>
+            <Link href="/makeup" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Makeup</Link>
+            <Link href="/#philosophy" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">About</Link>
           </nav>
 
           <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
@@ -98,11 +98,11 @@ export function Navbar() {
               </div>
               
               <nav className="flex flex-col gap-6">
-                <a href="#" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Shop All</a>
-                <a href="#" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Skincare</a>
-                <a href="#" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Makeup</a>
-                <a href="#" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">About Us</a>
-                <a href="#" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Contact</a>
+                <Link href="/products" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Shop All</Link>
+                <Link href="/skincare" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Skincare</Link>
+                <Link href="/makeup" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Makeup</Link>
+                <Link href="/#philosophy" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">About Us</Link>
+                <Link href="/#contact" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Contact</Link>
               </nav>
 
               <div className="mt-auto absolute bottom-8 left-8 right-8 flex gap-4 pt-8 border-t border-stone-200">
