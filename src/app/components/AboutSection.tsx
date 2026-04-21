@@ -5,7 +5,7 @@ import { motion } from 'motion/react';
 
 export function AboutSection() {
   return (
-    <section className="bg-stone-900 text-[#faf9f6] py-32 md:py-48 relative overflow-hidden">
+    <section id="philosophy" className="bg-stone-900 text-[#faf9f6] py-32 md:py-48 relative overflow-hidden">
       {/* Decorative element */}
       <div className="absolute top-0 right-0 w-1/2 h-full bg-stone-800/20 blur-3xl -z-10 rounded-full mix-blend-screen" />
       
