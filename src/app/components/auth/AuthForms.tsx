@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
+import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
 type Errors = Record<string, string>;
-
-// TODO(auth): replace local-only success states with secure Next server actions once the auth provider is selected.
 
 type TextFieldProps = {
   id: string;
@@ -78,13 +78,28 @@ function SuccessState({ message }: { message: string }) {
   );
 }
 
+function FormError({ message }: { message?: string }) {
+  if (!message) return null;
+
+  return (
+    <div className="border border-stone-300 bg-[#faf9f6] p-6">
+      <p className="text-sm leading-relaxed text-[var(--elanoire-color-destructive)]">
+        {message}
+      </p>
+    </div>
+  );
+}
+
 export function SignInForm() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: Errors = {};
 
@@ -92,14 +107,36 @@ export function SignInForm() {
     if (!password) nextErrors.password = 'Enter your password.';
 
     setErrors(nextErrors);
-    setSubmitted(Object.keys(nextErrors).length === 0);
+    setFormError('');
+
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setIsSubmitting(true);
+
+    const result = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
+    });
+
+    setIsSubmitting(false);
+
+    if (result?.error) {
+      setFormError('We could not sign you in with those details.');
+      return;
+    }
+
+    setSubmitted(true);
+    router.push('/account');
+    router.refresh();
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8" noValidate>
       {submitted ? (
-        <SuccessState message="Sign in validation is ready. Backend authentication can now be connected to this flow." />
+        <SuccessState message="Signed in successfully. Redirecting to your account." />
       ) : null}
+      <FormError message={formError} />
       <TextField
         id="email"
         label="Email address"
@@ -127,21 +164,24 @@ export function SignInForm() {
           Forgot password
         </Link>
       </div>
-      <SubmitButton>Sign In</SubmitButton>
+      <SubmitButton>{isSubmitting ? 'Signing In' : 'Sign In'}</SubmitButton>
     </form>
   );
 }
 
 export function SignUpForm() {
+  const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptsTerms, setAcceptsTerms] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
+  const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextErrors: Errors = {};
 
@@ -152,14 +192,57 @@ export function SignUpForm() {
     if (!acceptsTerms) nextErrors.terms = 'Confirm you accept the account terms.';
 
     setErrors(nextErrors);
-    setSubmitted(Object.keys(nextErrors).length === 0);
+    setFormError('');
+
+    if (Object.keys(nextErrors).length > 0) return;
+
+    setIsSubmitting(true);
+
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        email,
+        password,
+      }),
+    });
+
+    if (!response.ok) {
+      const data = (await response.json()) as { message?: string; errors?: Errors };
+      setFormError(data.message ?? 'We could not create your account.');
+      setErrors(data.errors ?? {});
+      setIsSubmitting(false);
+      return;
+    }
+
+    const signInResult = await signIn('credentials', {
+      email,
+      password,
+      redirect: false,
+    });
+
+    setIsSubmitting(false);
+
+    if (signInResult?.error) {
+      setFormError('Your account was created, but we could not start a session.');
+      return;
+    }
+
+    setSubmitted(true);
+    router.push('/account');
+    router.refresh();
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8" noValidate>
       {submitted ? (
-        <SuccessState message="Account validation is ready. The next backend step is to create the user and start a secure session." />
+        <SuccessState message="Account created successfully. Redirecting to your account." />
       ) : null}
+      <FormError message={formError} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
         <TextField id="firstName" label="First name" autoComplete="given-name" value={firstName} error={errors.firstName} onChange={setFirstName} />
         <TextField id="lastName" label="Last name" autoComplete="family-name" value={lastName} error={errors.lastName} onChange={setLastName} />
@@ -180,7 +263,7 @@ export function SignUpForm() {
           <p className="mt-3 text-sm text-[var(--elanoire-color-destructive)]">{errors.terms}</p>
         ) : null}
       </div>
-      <SubmitButton>Create Account</SubmitButton>
+      <SubmitButton>{isSubmitting ? 'Creating Account' : 'Create Account'}</SubmitButton>
     </form>
   );
 }
