@@ -2,13 +2,17 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ShoppingBag, Search, User, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from './cart/CartProvider';
 
 export function Navbar() {
+  const router = useRouter();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const { totalItems } = useCart();
 
   useEffect(() => {
@@ -18,6 +22,15 @@ export function Navbar() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  function handleSearchSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = searchQuery.trim();
+
+    setSearchOpen(false);
+    setMobileMenuOpen(false);
+    router.push(query ? `/products?search=${encodeURIComponent(query)}` : '/products');
+  }
 
   return (
     <>
@@ -31,10 +44,15 @@ export function Navbar() {
       >
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
           <div className="flex items-center gap-6 md:hidden">
-            <button onClick={() => setMobileMenuOpen(true)} className="p-2 -ml-2 text-stone-900">
+            <button type="button" aria-label="Open menu" onClick={() => setMobileMenuOpen(true)} className="p-2 -ml-2 text-stone-900">
               <Menu size={24} strokeWidth={1.5} />
             </button>
-            <button className="p-2 text-stone-900 md:hidden">
+            <button
+              type="button"
+              aria-label="Search products"
+              onClick={() => setSearchOpen((currentValue) => !currentValue)}
+              className="p-2 text-stone-900 md:hidden"
+            >
               <Search size={20} strokeWidth={1.5} />
             </button>
           </div>
@@ -52,7 +70,12 @@ export function Navbar() {
           </Link>
 
           <div className="flex items-center gap-4 md:gap-6">
-            <button className="hidden md:block p-2 text-stone-900 hover:text-stone-500 transition-colors">
+            <button
+              type="button"
+              aria-label="Search products"
+              onClick={() => setSearchOpen((currentValue) => !currentValue)}
+              className="hidden md:block p-2 text-stone-900 hover:text-stone-500 transition-colors"
+            >
               <Search size={20} strokeWidth={1.5} />
             </button>
             <Link href="/sign-in" aria-label="Account sign in" className="hidden md:block p-2 text-stone-900 hover:text-stone-500 transition-colors">
@@ -69,6 +92,47 @@ export function Navbar() {
           </div>
         </div>
       </motion.header>
+
+      <AnimatePresence>
+        {searchOpen ? (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="fixed top-[84px] md:top-[96px] left-0 right-0 z-40 bg-[#faf9f6]/95 backdrop-blur-md border-y border-stone-200"
+          >
+            <form onSubmit={handleSearchSubmit} className="max-w-7xl mx-auto px-6 md:px-12 py-5 flex items-center gap-4">
+              <Search size={18} strokeWidth={1.5} className="text-stone-500 shrink-0" />
+              <label htmlFor="site-search" className="sr-only">
+                Search products
+              </label>
+              <input
+                id="site-search"
+                type="search"
+                autoComplete="off"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search skincare, makeup, fragrance"
+                className="min-w-0 flex-1 bg-transparent border-0 py-3 text-stone-900 placeholder:text-stone-400 outline-none"
+              />
+              <button
+                type="submit"
+                className="text-xs tracking-[0.2em] uppercase text-stone-900 border-b border-stone-900 pb-1 hover:text-stone-500 hover:border-stone-500 transition-colors"
+              >
+                Search
+              </button>
+              <button
+                type="button"
+                aria-label="Close search"
+                onClick={() => setSearchOpen(false)}
+                className="p-2 text-stone-500 hover:text-stone-900 transition-colors"
+              >
+                <X size={18} strokeWidth={1.5} />
+              </button>
+            </form>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {mobileMenuOpen && (
@@ -92,7 +156,7 @@ export function Navbar() {
                   <span className="text-xl font-serif tracking-wide">ÉLANOIRE</span>
                   <span className="text-[0.55rem] tracking-[0.2em] uppercase text-stone-500 -mt-0.5">Beauty UK</span>
                 </div>
-                <button onClick={() => setMobileMenuOpen(false)} className="p-2 -mr-2 text-stone-500">
+                <button type="button" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)} className="p-2 -mr-2 text-stone-500">
                   <X size={24} strokeWidth={1.5} />
                 </button>
               </div>

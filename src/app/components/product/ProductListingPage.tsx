@@ -8,6 +8,7 @@ type ProductListingPageProps = {
   title: string;
   description: string;
   products: Product[];
+  searchQuery?: string;
 };
 
 export function ProductListingPage({
@@ -15,7 +16,19 @@ export function ProductListingPage({
   title,
   description,
   products,
+  searchQuery = '',
 }: ProductListingPageProps) {
+  const normalisedSearchQuery = searchQuery.trim().toLowerCase();
+  const visibleProducts = normalisedSearchQuery
+    ? products.filter((product) =>
+        [
+          product.name,
+          product.category,
+          product.description,
+        ].some((value) => value.toLowerCase().includes(normalisedSearchQuery)),
+      )
+    : products;
+
   return (
     <div className="min-h-screen bg-[#faf9f6] text-stone-900 font-sans antialiased selection:bg-stone-900 selection:text-[#faf9f6]">
       <Navbar />
@@ -32,10 +45,15 @@ export function ProductListingPage({
               <p className="text-stone-600 text-lg md:text-xl font-light leading-relaxed max-w-xl">
                 {description}
               </p>
+              {searchQuery ? (
+                <p className="text-stone-500 text-sm tracking-[0.2em] uppercase mt-8">
+                  Search: {searchQuery}
+                </p>
+              ) : null}
             </div>
             <div className="border-t border-stone-300 pt-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
               <span className="text-xs tracking-[0.2em] uppercase text-stone-500">
-                {products.length} pieces
+                {visibleProducts.length} pieces
               </span>
               <span className="text-xs tracking-[0.2em] uppercase text-stone-500">
                 Curated Sort
@@ -43,11 +61,22 @@ export function ProductListingPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-14">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {visibleProducts.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12 lg:gap-14">
+              {visibleProducts.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          ) : (
+            <div className="border border-stone-200 bg-[#faf9f6] p-8 md:p-12 max-w-3xl">
+              <h2 className="text-3xl font-serif text-stone-900 mb-4">
+                No pieces found.
+              </h2>
+              <p className="text-stone-600 font-light leading-relaxed max-w-xl">
+                Try a different search across skincare, makeup, or fragrance.
+              </p>
+            </div>
+          )}
         </section>
       </main>
       <Footer />
