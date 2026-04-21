@@ -1,11 +1,24 @@
 
-  # Website design for Élanoire Beauty
+# Élanoire Beauty UK
 
-  This is a code bundle for Website design for Élanoire Beauty. The original project is available at https://www.figma.com/design/AsMOMdEZdq2OEJNKpSDoMP/Website-design-for-%C3%89lanoire-Beauty.
+Luxury beauty e-commerce website for Élanoire Beauty UK.
 
-  ## Running the code
+## Running The Code
 
-  Run `npm i` to install the dependencies.
+Install dependencies:
 
-  Run `npm run dev` to start the development server.
-  
+```bash
+npm install
+```
+
+Start the Next.js development server:
+
+```bash
+npm run dev
+```
+
+Build for production:
+
+```bash
+npm run build
+```
