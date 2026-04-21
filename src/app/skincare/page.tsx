@@ -1,9 +1,11 @@
 import { ProductListingPage } from '../components/product/ProductListingPage';
-import { products } from '@/data/products';
+import { listProductsByCategory } from '@/server/products';
 
-const skincareProducts = products.filter((product) => product.category === 'Skincare');
+export const dynamic = 'force-dynamic';
 
-export default function SkincarePage() {
+export default async function SkincarePage() {
+  const skincareProducts = await listProductsByCategory('Skincare');
+
   return (
     <ProductListingPage
       eyebrow="Skincare"

@@ -4,20 +4,17 @@ import { ArrowLeft } from 'lucide-react';
 import { Footer } from '../../components/Footer';
 import { Navbar } from '../../components/Navbar';
 import { ProductAddButton } from '../../components/product/ProductAddButton';
-import { products } from '@/data/products';
+import { getProductBySlug } from '@/server/products';
 
-export function generateStaticParams() {
-  return products.map((product) => ({
-    slug: product.slug,
-  }));
-}
+export const dynamic = 'force-dynamic';
 
-export default function ProductDetailPage({
+export default async function ProductDetailPage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  const product = products.find((item) => item.slug === params.slug);
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
 
   if (!product) notFound();
 

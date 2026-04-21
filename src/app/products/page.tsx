@@ -1,7 +1,11 @@
 import { ProductListingPage } from '../components/product/ProductListingPage';
-import { products } from '@/data/products';
+import { listProducts } from '@/server/products';
 
-export default function ProductsPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function ProductsPage() {
+  const products = await listProducts();
+
   return (
     <ProductListingPage
       eyebrow="Shop All"

@@ -23,3 +23,17 @@ Remaining blockers:
 - A real PostgreSQL/Supabase database URL is required before registration and sign-in can persist live users.
 - Email reset delivery is still a muted placeholder until an email provider is selected.
 - Product pages still use static data until the next product-database milestone.
+
+## Milestone 2: Database-Backed Product Reads
+
+Connected:
+
+- Product listing pages now read through server product accessors.
+- Product API routes now read through server product accessors.
+- Product detail route now resolves products through the server data layer.
+- Static product data remains only as a local fallback when `DATABASE_URL` is unavailable.
+
+Remaining blockers:
+
+- A PostgreSQL/Supabase `DATABASE_URL` and seeded product table are required for live database reads.
+- Product admin/editor tooling is not implemented yet.
