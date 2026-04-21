@@ -51,3 +51,24 @@ Remaining blockers:
 
 - Cart merging from guest cart into a newly authenticated account can be refined after checkout rules are finalized.
 - Checkout still needs Stripe session creation and order persistence.
+
+## Milestone 4: Stripe Checkout And Order Updates
+
+Connected:
+
+- `POST /api/checkout` creates a Stripe Checkout session from the authenticated Prisma cart.
+- Checkout creates a pending order and order items before sending the customer to Stripe.
+- Stripe Checkout metadata links the payment session to the order and user.
+- `POST /api/stripe/webhook` verifies Stripe signatures, marks completed checkout sessions as paid, and clears the authenticated cart.
+- Expired Stripe checkout sessions mark pending orders as cancelled.
+
+Required environment:
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `NEXT_PUBLIC_APP_URL`
+
+Remaining blockers:
+
+- A live Stripe account and webhook endpoint are required before real payment confirmation can update orders.
+- Shipping, tax, discount, and fulfilment workflows are still outside this milestone.
