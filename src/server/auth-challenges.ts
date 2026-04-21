@@ -69,6 +69,14 @@ function isActiveKeyConflict(error: unknown) {
 }
 
 function shouldExposeDevelopmentCode() {
+  if (process.env.AUTH_EXPOSE_DEV_CODE === 'true') {
+    return true;
+  }
+
+  if (process.env.AUTH_EXPOSE_DEV_CODE === 'false') {
+    return false;
+  }
+
   return process.env.NODE_ENV !== 'production';
 }
 

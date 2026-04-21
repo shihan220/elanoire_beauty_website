@@ -16,6 +16,7 @@ SMTP_HOST="127.0.0.1"
 SMTP_PORT="1025"
 SMTP_USER=""
 SMTP_PASSWORD=""
+AUTH_EXPOSE_DEV_CODE="true"
 ```
 
 Generate a local `NEXTAUTH_SECRET` with:
@@ -54,6 +55,20 @@ npm run db:seed
 For production, set `AUTH_EMAIL_FROM`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASSWORD` to a real SMTP provider.
 
 For local testing, run any SMTP capture service on `127.0.0.1:1025`. The signup and signin APIs will send verification-code emails through SMTP when `SMTP_HOST` is present. In development, the API response also includes `devCode` so the flow can be tested without reading a real inbox.
+
+Set `AUTH_EXPOSE_DEV_CODE="true"` only for local testing when emails are captured locally or when a local preview server is running with `npm run start`. Keep it `false` in production.
+
+To receive codes in a Gmail inbox during local testing, replace the local capture values in `.env.local` with Gmail SMTP values and restart the app:
+
+```bash
+AUTH_EMAIL_FROM="Élanoire Beauty UK <your-gmail-address@gmail.com>"
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT="587"
+SMTP_USER="your-gmail-address@gmail.com"
+SMTP_PASSWORD="your-gmail-app-password"
+```
+
+Gmail requires an app password for SMTP. The normal Gmail login password will not work.
 
 ## Expected Auth Flow
 

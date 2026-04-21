@@ -24,6 +24,7 @@ Required environment:
 - `SMTP_PORT`
 - `SMTP_USER`
 - `SMTP_PASSWORD`
+- `AUTH_EXPOSE_DEV_CODE` for local-only verification-code display
 
 Remaining blockers:
 
