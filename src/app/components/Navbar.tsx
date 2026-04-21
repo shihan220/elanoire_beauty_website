@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { ShoppingBag, Search, User, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -43,18 +44,18 @@ export function Navbar() {
             <a href="#" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">About</a>
           </nav>
 
-          <a href="#" className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+          <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
             <h1 className="text-2xl md:text-3xl font-serif tracking-wide text-stone-900">ÉLANOIRE</h1>
             <span className="text-[0.6rem] tracking-[0.2em] uppercase text-stone-500 -mt-1">Beauty UK</span>
-          </a>
+          </Link>
 
           <div className="flex items-center gap-4 md:gap-6">
             <button className="hidden md:block p-2 text-stone-900 hover:text-stone-500 transition-colors">
               <Search size={20} strokeWidth={1.5} />
             </button>
-            <button className="hidden md:block p-2 text-stone-900 hover:text-stone-500 transition-colors">
+            <Link href="/sign-in" aria-label="Account sign in" className="hidden md:block p-2 text-stone-900 hover:text-stone-500 transition-colors">
               <User size={20} strokeWidth={1.5} />
-            </button>
+            </Link>
             <button className="p-2 text-stone-900 hover:text-stone-500 transition-colors relative">
               <ShoppingBag size={20} strokeWidth={1.5} />
               <span className="absolute top-1 right-1 w-2 h-2 bg-stone-900 rounded-full"></span>
@@ -99,10 +100,10 @@ export function Navbar() {
               </nav>
 
               <div className="mt-auto absolute bottom-8 left-8 right-8 flex gap-4 pt-8 border-t border-stone-200">
-                <button className="flex items-center gap-2 text-sm uppercase tracking-widest text-stone-500">
+                <Link href="/sign-in" className="flex items-center gap-2 text-sm uppercase tracking-widest text-stone-500">
                   <User size={18} strokeWidth={1.5} />
                   Account
-                </button>
+                </Link>
               </div>
             </motion.div>
           </motion.div>
