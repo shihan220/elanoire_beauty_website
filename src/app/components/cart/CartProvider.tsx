@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { getProductById, type Product } from '@/data/products';
 
 type StoredCartItem = {
@@ -11,6 +11,10 @@ type StoredCartItem = {
 export type CartLineItem = StoredCartItem & {
   product: Product;
   lineTotal: number;
+};
+
+type CartSummary = {
+  items: CartLineItem[];
 };
 
 type CartContextValue = {
@@ -26,64 +30,87 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | null>(null);
 const storageKey = 'elanoire-cart';
 
-// TODO(cart): move cart persistence to a session-aware backend once checkout authentication is available.
+function buildLineItems(items: StoredCartItem[]) {
+  return items.flatMap((item) => {
+    const product = getProductById(item.productId);
+    if (!product) return [];
+
+    return {
+      ...item,
+      product,
+      lineTotal: product.price * item.quantity,
+    };
+  });
+}
+
+function normaliseItems(items: CartLineItem[]) {
+  return items.map((item) => ({
+    productId: item.productId,
+    quantity: item.quantity,
+  }));
+}
+
+async function syncCart(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>) {
+  const response = await fetch('/api/cart', {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) return null;
+
+  return (await response.json()) as CartSummary;
+}
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [storedItems, setStoredItems] = useState<StoredCartItem[]>([]);
+  const [items, setItems] = useState<CartLineItem[]>([]);
   const [hasLoadedCart, setHasLoadedCart] = useState(false);
 
   useEffect(() => {
     const rawCart = window.localStorage.getItem(storageKey);
-    if (!rawCart) {
-      setHasLoadedCart(true);
-      return;
-    }
+    let localItems: StoredCartItem[] = [];
 
     try {
-      const parsedCart = JSON.parse(rawCart) as StoredCartItem[];
-      setStoredItems(parsedCart.filter((item) => getProductById(item.productId)));
+      localItems = rawCart ? (JSON.parse(rawCart) as StoredCartItem[]) : [];
     } catch {
       window.localStorage.removeItem(storageKey);
-    } finally {
-      setHasLoadedCart(true);
     }
+
+    setItems(buildLineItems(localItems));
+    setHasLoadedCart(true);
+
+    syncCart('GET').then((serverCart) => {
+      if (!serverCart) return;
+      setItems(serverCart.items);
+    }).catch(() => undefined);
   }, []);
 
   useEffect(() => {
     if (!hasLoadedCart) return;
-    window.localStorage.setItem(storageKey, JSON.stringify(storedItems));
-  }, [hasLoadedCart, storedItems]);
-
-  const items = useMemo<CartLineItem[]>(() => {
-    return storedItems.flatMap((item) => {
-      const product = getProductById(item.productId);
-      if (!product) return [];
-
-      return {
-        ...item,
-        product,
-        lineTotal: product.price * item.quantity,
-      };
-    });
-  }, [storedItems]);
+    window.localStorage.setItem(storageKey, JSON.stringify(normaliseItems(items)));
+  }, [hasLoadedCart, items]);
 
   const totalItems = items.reduce((total, item) => total + item.quantity, 0);
   const subtotal = items.reduce((total, item) => total + item.lineTotal, 0);
 
   function addItem(productId: string) {
-    setStoredItems((currentItems) => {
+    setItems((currentItems) => {
       const existingItem = currentItems.find((item) => item.productId === productId);
 
       if (existingItem) {
         return currentItems.map((item) =>
           item.productId === productId
-            ? { ...item, quantity: Math.min(item.quantity + 1, 9) }
+            ? { ...item, quantity: Math.min(item.quantity + 1, 9), lineTotal: item.product.price * Math.min(item.quantity + 1, 9) }
             : item,
         );
       }
 
-      return [...currentItems, { productId, quantity: 1 }];
+      return [...currentItems, ...buildLineItems([{ productId, quantity: 1 }])];
     });
+
+    syncCart('POST', { productId, quantity: 1 }).then((serverCart) => {
+      if (serverCart) setItems(serverCart.items);
+    }).catch(() => undefined);
   }
 
   function updateQuantity(productId: string, quantity: number) {
@@ -92,21 +119,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setStoredItems((currentItems) =>
+    const nextQuantity = Math.min(quantity, 9);
+
+    setItems((currentItems) =>
       currentItems.map((item) =>
         item.productId === productId
-          ? { ...item, quantity: Math.min(quantity, 9) }
+          ? { ...item, quantity: nextQuantity, lineTotal: item.product.price * nextQuantity }
           : item,
       ),
     );
+
+    syncCart('PATCH', { productId, quantity: nextQuantity }).then((serverCart) => {
+      if (serverCart) setItems(serverCart.items);
+    }).catch(() => undefined);
   }
 
   function removeItem(productId: string) {
-    setStoredItems((currentItems) => currentItems.filter((item) => item.productId !== productId));
+    setItems((currentItems) => currentItems.filter((item) => item.productId !== productId));
+
+    syncCart('DELETE', { productId }).then((serverCart) => {
+      if (serverCart) setItems(serverCart.items);
+    }).catch(() => undefined);
   }
 
   function clearCart() {
-    setStoredItems([]);
+    setItems([]);
+
+    syncCart('DELETE').then((serverCart) => {
+      if (serverCart) setItems(serverCart.items);
+    }).catch(() => undefined);
   }
 
   const value = {

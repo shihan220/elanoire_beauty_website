@@ -1,4 +1,6 @@
+import type { CartItem, Product as DatabaseProduct } from '@prisma/client';
 import { getProductById } from '@/data/products';
+import { mapProduct } from './products';
 
 export type CartRequestItem = {
   productId: string;
@@ -23,6 +25,31 @@ export function normaliseCartItems(items: CartRequestItem[]) {
 
 export function calculateCartSummary(items: CartRequestItem[]) {
   const lineItems = normaliseCartItems(items);
+  const totalItems = lineItems.reduce((total, item) => total + item.quantity, 0);
+  const subtotal = lineItems.reduce((total, item) => total + item.lineTotal, 0);
+
+  return {
+    items: lineItems,
+    totalItems,
+    subtotal,
+    currency: 'GBP',
+  };
+}
+
+export function calculateDatabaseCartSummary(
+  items: Array<CartItem & { product: DatabaseProduct }>,
+) {
+  const lineItems = items.map((item) => {
+    const product = mapProduct(item.product);
+
+    return {
+      productId: item.productId,
+      quantity: item.quantity,
+      product,
+      lineTotal: product.price * item.quantity,
+    };
+  });
+
   const totalItems = lineItems.reduce((total, item) => total + item.quantity, 0);
   const subtotal = lineItems.reduce((total, item) => total + item.lineTotal, 0);
 

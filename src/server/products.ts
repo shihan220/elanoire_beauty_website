@@ -15,7 +15,7 @@ function formatPrice(pricePence: number) {
   }).format(pricePence / 100);
 }
 
-function mapProduct(product: DatabaseProduct): Product {
+export function mapProduct(product: DatabaseProduct): Product {
   return {
     id: product.id,
     slug: product.slug,
