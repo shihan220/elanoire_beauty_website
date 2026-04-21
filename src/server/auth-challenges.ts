@@ -1,5 +1,5 @@
 import { randomInt } from 'crypto';
-import { AuthChallengePurpose, type AuthChallenge } from '@prisma/client';
+import { AuthChallengePurpose, Prisma, type AuthChallenge } from '@prisma/client';
 import nodemailer from 'nodemailer';
 import { prisma } from './db';
 import { hashPassword, verifyPassword } from './password';
@@ -7,10 +7,24 @@ import { hashPassword, verifyPassword } from './password';
 export const authCodeLength = 6;
 const authCodeMaxAttempts = 5;
 const authCodeTtlMinutes = 10;
+export const authCodeResendCooldownSeconds = 60;
 
 export class AuthCodeDeliveryError extends Error {
   constructor() {
     super('Auth code delivery is not configured.');
+  }
+}
+
+export class AuthCodeCooldownError extends Error {
+  retryAt: Date;
+
+  constructor(retryAt: Date) {
+    super('Please wait before requesting another verification code.');
+    this.retryAt = retryAt;
+  }
+
+  get retryAfterSeconds() {
+    return Math.max(1, Math.ceil((this.retryAt.getTime() - Date.now()) / 1000));
   }
 }
 
@@ -39,6 +53,19 @@ export function hasDatabaseConfig() {
 
 function generateAuthCode() {
   return randomInt(0, 1_000_000).toString().padStart(authCodeLength, '0');
+}
+
+function getActiveChallengeKey(email: string, purpose: AuthChallengePurpose) {
+  return `${purpose}:${email}`;
+}
+
+function isActiveKeyConflict(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false;
+  }
+
+  const target = error.meta?.target;
+  return Array.isArray(target) ? target.includes('activeKey') : target === 'activeKey';
 }
 
 function shouldExposeDevelopmentCode() {
@@ -102,37 +129,93 @@ export async function createAuthChallenge({
   const normalisedEmail = normaliseEmail(email);
   const code = generateAuthCode();
   const codeHash = await hashPassword(code);
+  const activeKey = getActiveChallengeKey(normalisedEmail, purpose);
+  const now = new Date();
+  const replaceableChallengeCutoff = new Date(now.getTime() - authCodeResendCooldownSeconds * 1000);
   const expiresAt = new Date(Date.now() + authCodeTtlMinutes * 60 * 1000);
 
-  await prisma.authChallenge.deleteMany({
+  const activeChallenge = await prisma.authChallenge.findFirst({
     where: {
       email: normalisedEmail,
       purpose,
       consumedAt: null,
+      expiresAt: {
+        gt: now,
+      },
     },
+    orderBy: { createdAt: 'desc' },
+    select: { createdAt: true },
   });
 
-  const challenge = await prisma.authChallenge.create({
-    data: {
-      email: normalisedEmail,
-      purpose,
-      codeHash,
-      firstName,
-      lastName,
-      passwordHash,
-      expiresAt,
-    },
-    select: {
-      id: true,
-      expiresAt: true,
-    },
-  });
+  if (activeChallenge) {
+    const retryAt = new Date(activeChallenge.createdAt.getTime() + authCodeResendCooldownSeconds * 1000);
+
+    if (retryAt.getTime() > Date.now()) {
+      throw new AuthCodeCooldownError(retryAt);
+    }
+  }
+
+  let challenge: { id: string; expiresAt: Date } | null = null;
+
+  try {
+    const [, createdChallenge] = await prisma.$transaction([
+      prisma.authChallenge.deleteMany({
+        where: {
+          email: normalisedEmail,
+          purpose,
+          consumedAt: null,
+          createdAt: {
+            lte: replaceableChallengeCutoff,
+          },
+        },
+      }),
+      prisma.authChallenge.create({
+        data: {
+          email: normalisedEmail,
+          purpose,
+          activeKey,
+          codeHash,
+          firstName,
+          lastName,
+          passwordHash,
+          expiresAt,
+        },
+        select: {
+          id: true,
+          expiresAt: true,
+        },
+      }),
+    ]);
+
+    challenge = createdChallenge;
+  } catch (error) {
+    if (isActiveKeyConflict(error)) {
+      const conflictingChallenge = await prisma.authChallenge.findUnique({
+        where: { activeKey },
+        select: { createdAt: true },
+      });
+
+      if (conflictingChallenge) {
+        throw new AuthCodeCooldownError(
+          new Date(conflictingChallenge.createdAt.getTime() + authCodeResendCooldownSeconds * 1000),
+        );
+      }
+    }
+
+    throw error;
+  }
+
+  if (!challenge) {
+    throw new Error('Auth challenge could not be created.');
+  }
 
   try {
     await deliverAuthCode(normalisedEmail, code, purpose);
   } catch (error) {
     await prisma.authChallenge.deleteMany({
-      where: { id: challenge.id },
+      where: {
+        id: challenge.id,
+      },
     });
 
     throw error;
@@ -143,6 +226,23 @@ export async function createAuthChallenge({
     expiresAt: challenge.expiresAt,
     devCode: shouldExposeDevelopmentCode() ? code : undefined,
   };
+}
+
+export async function cleanupExpiredAuthChallenges() {
+  await prisma.authChallenge.updateMany({
+    where: {
+      activeKey: {
+        not: null,
+      },
+      consumedAt: null,
+      expiresAt: {
+        lte: new Date(),
+      },
+    },
+    data: {
+      activeKey: null,
+    },
+  });
 }
 
 export async function verifyAuthChallenge({
@@ -164,6 +264,18 @@ export async function verifyAuthChallenge({
   }
 
   if (challenge.expiresAt.getTime() < Date.now()) {
+    await prisma.authChallenge.updateMany({
+      where: {
+        id: challenge.id,
+        activeKey: {
+          not: null,
+        },
+      },
+      data: {
+        activeKey: null,
+      },
+    });
+
     return { ok: false as const, message: 'This verification code has expired.' };
   }
 
@@ -191,7 +303,10 @@ export async function consumeAuthChallenge(challenge: AuthChallenge) {
       id: challenge.id,
       consumedAt: null,
     },
-    data: { consumedAt: new Date() },
+    data: {
+      consumedAt: new Date(),
+      activeKey: null,
+    },
   });
 
   return result.count === 1;

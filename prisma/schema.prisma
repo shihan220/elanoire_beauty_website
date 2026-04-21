@@ -42,6 +42,7 @@ model AuthChallenge {
   id           String               @id @default(cuid())
   email        String
   purpose      AuthChallengePurpose
+  activeKey    String?              @unique
   codeHash     String
   firstName    String?
   lastName     String?

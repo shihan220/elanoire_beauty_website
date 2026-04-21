@@ -64,6 +64,15 @@ For local testing, run any SMTP capture service on `127.0.0.1:1025`. The signup 
 5. The signin form posts the code through the existing NextAuth credentials callback with `flow=signin`.
 6. NextAuth verifies and consumes the challenge, upgrades legacy bcrypt hashes to Argon2id when needed, and starts the session.
 
+## Verification-Code Protections
+
+- Codes expire after 10 minutes.
+- Code verification is limited to 5 attempts.
+- A new code request is rate-limited by a 60-second resend cooldown.
+- PostgreSQL enforces one active unconsumed challenge per email and purpose through the `activeKey` field.
+- Consumed or expired challenges clear `activeKey`, allowing later challenges while preserving challenge history.
+- Duplicate code requests inside the cooldown window return `429` with a `Retry-After` header.
+
 ## Validation Queries
 
 Check that a user was created with Argon2id:
@@ -72,8 +81,8 @@ Check that a user was created with Argon2id:
 /opt/homebrew/opt/postgresql@16/bin/psql -h 127.0.0.1 -p 5432 -d elanoire_beauty -c 'select email, left("passwordHash", 10) from "User" order by "createdAt" desc limit 1;'
 ```
 
-Check that the latest signup and signin challenges were consumed:
+Check that the latest signup and signin challenges were consumed and no longer active:
 
 ```bash
-/opt/homebrew/opt/postgresql@16/bin/psql -h 127.0.0.1 -p 5432 -d elanoire_beauty -c 'select purpose, "consumedAt" is not null as consumed from "AuthChallenge" order by "createdAt" desc limit 2;'
+/opt/homebrew/opt/postgresql@16/bin/psql -h 127.0.0.1 -p 5432 -d elanoire_beauty -c 'select purpose, "consumedAt" is not null as consumed, "activeKey" is null as inactive from "AuthChallenge" order by "createdAt" desc limit 2;'
 ```

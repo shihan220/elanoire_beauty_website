@@ -2,7 +2,7 @@ import { AuthChallengePurpose } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/server/db';
-import { AuthCodeDeliveryError, createAuthChallenge, hasDatabaseConfig, normaliseEmail } from '@/server/auth-challenges';
+import { AuthCodeCooldownError, AuthCodeDeliveryError, cleanupExpiredAuthChallenges, createAuthChallenge, hasDatabaseConfig, normaliseEmail } from '@/server/auth-challenges';
 import { hashPassword, minimumPasswordLength } from '@/server/password';
 
 const registerSchema = z.object({
@@ -52,6 +52,8 @@ export async function POST(request: Request) {
       );
     }
 
+    await cleanupExpiredAuthChallenges();
+
     const passwordHash = await hashPassword(password);
     const challenge = await createAuthChallenge({
       email: normalisedEmail,
@@ -66,17 +68,33 @@ export async function POST(request: Request) {
       ...challenge,
     }, { status: 202 });
   } catch (error) {
-    console.error('Registration challenge creation failed.', {
-      email: normalisedEmail,
-      error: getErrorMessage(error),
-    });
-
     if (error instanceof AuthCodeDeliveryError) {
       return NextResponse.json(
         { message: 'Account verification email is not configured yet.' },
         { status: 503 },
       );
     }
+
+    if (error instanceof AuthCodeCooldownError) {
+      return NextResponse.json(
+        {
+          message: error.message,
+          retryAfterSeconds: error.retryAfterSeconds,
+          retryAt: error.retryAt,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': error.retryAfterSeconds.toString(),
+          },
+        },
+      );
+    }
+
+    console.error('Registration challenge creation failed.', {
+      email: normalisedEmail,
+      error: getErrorMessage(error),
+    });
 
     return NextResponse.json(
       { message: 'Account creation is unavailable. Check database configuration and try again.' },

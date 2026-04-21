@@ -1,7 +1,7 @@
 import { AuthChallengePurpose } from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { AuthCodeDeliveryError, createAuthChallenge, hasDatabaseConfig, normaliseEmail } from '@/server/auth-challenges';
+import { AuthCodeCooldownError, AuthCodeDeliveryError, cleanupExpiredAuthChallenges, createAuthChallenge, hasDatabaseConfig, normaliseEmail } from '@/server/auth-challenges';
 import { minimumPasswordLength, verifyPassword } from '@/server/password';
 import { prisma } from '@/server/db';
 
@@ -49,6 +49,8 @@ export async function POST(request: Request) {
       );
     }
 
+    await cleanupExpiredAuthChallenges();
+
     const challenge = await createAuthChallenge({
       email,
       purpose: AuthChallengePurpose.SIGN_IN,
@@ -59,17 +61,33 @@ export async function POST(request: Request) {
       ...challenge,
     }, { status: 202 });
   } catch (error) {
-    console.error('Sign-in challenge creation failed.', {
-      email,
-      error: getErrorMessage(error),
-    });
-
     if (error instanceof AuthCodeDeliveryError) {
       return NextResponse.json(
         { message: 'Account verification email is not configured yet.' },
         { status: 503 },
       );
     }
+
+    if (error instanceof AuthCodeCooldownError) {
+      return NextResponse.json(
+        {
+          message: error.message,
+          retryAfterSeconds: error.retryAfterSeconds,
+          retryAt: error.retryAt,
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': error.retryAfterSeconds.toString(),
+          },
+        },
+      );
+    }
+
+    console.error('Sign-in challenge creation failed.', {
+      email,
+      error: getErrorMessage(error),
+    });
 
     return NextResponse.json(
       { message: 'Account sign-in is unavailable. Check database configuration and try again.' },
