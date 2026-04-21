@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, Check, Eye, EyeOff } from 'lucide-react';
+import { ArrowRight, Check, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
@@ -35,6 +35,7 @@ async function readJson(response: Response) {
     errors?: ApiErrors;
     challengeId?: string;
     devCode?: string;
+    retryAfterSeconds?: number;
   }>;
 }
 
@@ -150,8 +151,52 @@ function CodeNotice({ devCode }: { devCode?: string }) {
         Enter the six-digit verification code sent for this account.
       </p>
       {devCode ? (
-        <p className="mt-4 text-xs tracking-[0.2em] uppercase text-stone-500">
-          Development Code: {devCode}
+        <>
+          <p className="mt-4 text-xs tracking-[0.2em] uppercase text-stone-500">
+            Local Test Code: {devCode}
+          </p>
+          <p className="mt-3 text-xs leading-relaxed text-stone-500">
+            Local mail capture is active. Use this code while real SMTP delivery is not configured.
+          </p>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function getCodeRequestMessage(data: Awaited<ReturnType<typeof readJson>>, fallback: string) {
+  if (data.retryAfterSeconds) {
+    return `${data.message ?? fallback} Try again in ${data.retryAfterSeconds} seconds.`;
+  }
+
+  return data.message ?? fallback;
+}
+
+function ResendCodeButton({
+  disabled,
+  isLoading,
+  message,
+  onClick,
+}: {
+  disabled?: boolean;
+  isLoading?: boolean;
+  message?: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        disabled={disabled || isLoading}
+        onClick={onClick}
+        className="inline-flex items-center gap-3 text-xs tracking-[0.2em] uppercase text-stone-900 border-b border-stone-900 pb-1 hover:text-stone-500 hover:border-stone-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+      >
+        <RefreshCw size={14} strokeWidth={1.5} className={isLoading ? 'animate-spin' : ''} />
+        {isLoading ? 'Sending Code' : 'Resend Code'}
+      </button>
+      {message ? (
+        <p className="text-sm leading-relaxed text-stone-600" aria-live="polite">
+          {message}
         </p>
       ) : null}
     </div>
@@ -169,7 +214,59 @@ export function SignInForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+
+  async function requestSignInCode(isResend = false) {
+    const setLoading = isResend ? setIsResending : setIsSubmitting;
+    setLoading(true);
+    setResendMessage('');
+
+    try {
+      const response = await fetch('/api/auth/sign-in/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
+      const data = await readJson(response);
+
+      if (!response.ok || !data.challengeId) {
+        const message = getCodeRequestMessage(data, 'We could not send a verification code.');
+
+        if (isResend) {
+          setResendMessage(message);
+        } else {
+          setFormError(message);
+        }
+
+        setErrors(normaliseErrors(data.errors));
+        return;
+      }
+
+      setChallengeId(data.challengeId);
+      setDevCode(data.devCode ?? '');
+      setCode('');
+      setStep('code');
+      setErrors({});
+      setResendMessage(isResend ? 'A new verification code has been sent.' : '');
+    } catch {
+      const message = 'Verification code delivery is unavailable. Check the mail configuration and try again.';
+
+      if (isResend) {
+        setResendMessage(message);
+      } else {
+        setFormError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -186,35 +283,12 @@ export function SignInForm() {
 
     if (Object.keys(nextErrors).length > 0) return;
 
-    setIsSubmitting(true);
-
     if (step === 'details') {
-      const response = await fetch('/api/auth/sign-in/start', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-      const data = await readJson(response);
-
-      setIsSubmitting(false);
-
-      if (!response.ok || !data.challengeId) {
-        setFormError(data.message ?? 'We could not sign you in with those details.');
-        setErrors(normaliseErrors(data.errors));
-        return;
-      }
-
-      setChallengeId(data.challengeId);
-      setDevCode(data.devCode ?? '');
-      setCode('');
-      setStep('code');
+      await requestSignInCode(false);
       return;
     }
+
+    setIsSubmitting(true);
 
     const result = await signIn('credentials', {
       email,
@@ -275,6 +349,12 @@ export function SignInForm() {
             error={errors.code}
             onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
           />
+          <ResendCodeButton
+            disabled={isSubmitting}
+            isLoading={isResending}
+            message={resendMessage}
+            onClick={() => requestSignInCode(true)}
+          />
         </>
       ) : null}
       <div className="flex items-center justify-between gap-6">
@@ -307,7 +387,61 @@ export function SignUpForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+
+  async function requestSignUpCode(isResend = false) {
+    const setLoading = isResend ? setIsResending : setIsSubmitting;
+    setLoading(true);
+    setResendMessage('');
+
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          email,
+          password,
+        }),
+      });
+      const data = await readJson(response);
+
+      if (!response.ok || !data.challengeId) {
+        const message = getCodeRequestMessage(data, 'We could not send a verification code.');
+
+        if (isResend) {
+          setResendMessage(message);
+        } else {
+          setFormError(message);
+        }
+
+        setErrors(normaliseErrors(data.errors));
+        return;
+      }
+
+      setChallengeId(data.challengeId);
+      setDevCode(data.devCode ?? '');
+      setCode('');
+      setStep('code');
+      setErrors({});
+      setResendMessage(isResend ? 'A new verification code has been sent.' : '');
+    } catch {
+      const message = 'Verification code delivery is unavailable. Check the mail configuration and try again.';
+
+      if (isResend) {
+        setResendMessage(message);
+      } else {
+        setFormError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -327,37 +461,12 @@ export function SignUpForm() {
 
     if (Object.keys(nextErrors).length > 0) return;
 
-    setIsSubmitting(true);
-
     if (step === 'details') {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firstName,
-          lastName,
-          email,
-          password,
-        }),
-      });
-      const data = await readJson(response);
-
-      setIsSubmitting(false);
-
-      if (!response.ok || !data.challengeId) {
-        setFormError(data.message ?? 'We could not create your account.');
-        setErrors(normaliseErrors(data.errors));
-        return;
-      }
-
-      setChallengeId(data.challengeId);
-      setDevCode(data.devCode ?? '');
-      setCode('');
-      setStep('code');
+      await requestSignUpCode(false);
       return;
     }
+
+    setIsSubmitting(true);
 
     const signInResult = await signIn('credentials', {
       email,
@@ -404,6 +513,12 @@ export function SignUpForm() {
             value={code}
             error={errors.code}
             onChange={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))}
+          />
+          <ResendCodeButton
+            disabled={isSubmitting}
+            isLoading={isResending}
+            message={resendMessage}
+            onClick={() => requestSignUpCode(true)}
           />
         </>
       ) : null}

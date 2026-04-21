@@ -66,7 +66,10 @@ export const authOptions: NextAuthOptions = {
                 id: challenge.id,
                 consumedAt: null,
               },
-              data: { consumedAt: new Date() },
+              data: {
+                consumedAt: new Date(),
+                activeKey: null,
+              },
             });
 
             if (consumedChallenge.count !== 1) return null;
