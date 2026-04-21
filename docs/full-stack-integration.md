@@ -37,3 +37,17 @@ Remaining blockers:
 
 - A PostgreSQL/Supabase `DATABASE_URL` and seeded product table are required for live database reads.
 - Product admin/editor tooling is not implemented yet.
+
+## Milestone 3: Authenticated Cart Persistence
+
+Connected:
+
+- `/api/cart` now supports authenticated `GET`, `POST`, `PATCH`, and `DELETE` operations against Prisma cart items.
+- The client cart hydrates from the server when a user is signed in.
+- Guest users keep the existing local cart fallback.
+- Cart actions optimistically update the UI and sync to the database when a session is available.
+
+Remaining blockers:
+
+- Cart merging from guest cart into a newly authenticated account can be refined after checkout rules are finalized.
+- Checkout still needs Stripe session creation and order persistence.
