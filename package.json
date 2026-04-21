@@ -85,8 +85,5 @@
     "prisma": "^6.19.3",
     "tailwindcss": "4.1.12",
     "typescript": "latest"
-  },
-  "prisma": {
-    "seed": "node prisma/seed.mjs"
   }
 }
