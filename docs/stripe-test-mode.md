@@ -85,23 +85,25 @@ Use this guide to verify the signed-in Stripe checkout flow locally.
 
 4. Open `http://127.0.0.1:5173/cart` and select `Checkout`.
 
-5. Complete Stripe Checkout with test card `4242 4242 4242 4242`, any future expiry date, any CVC, and any UK postcode.
+5. On `http://127.0.0.1:5173/checkout`, review the order summary, fill the billing information, leave card payment selected, and continue to payment.
 
-6. After Stripe redirects back to `/account`, confirm the order appears in the order history.
+6. Complete Stripe Checkout with test card `4242 4242 4242 4242`, any future expiry date, any CVC, and any UK postcode.
 
-7. Confirm the Stripe CLI printed a delivered `checkout.session.completed` event.
+7. After Stripe redirects back to `/account`, confirm the order appears in the order history.
 
-8. Confirm the order status is `PAID` in the database. You can inspect it with:
+8. Confirm the Stripe CLI printed a delivered `checkout.session.completed` event.
+
+9. Confirm the order status is `PAID` in the database. You can inspect it with:
 
    ```bash
    npx prisma studio
    ```
 
-9. Confirm the user's cart is empty after the webhook runs.
+10. Confirm the order has billing fields populated and the user's cart is empty after the webhook runs.
 
 ## Expired Session Test
 
-1. Start checkout from `/cart`, but do not complete payment.
+1. Start checkout from `/checkout`, but do not complete payment.
 
 2. Copy the `cs_test_...` session id from the created order in Prisma Studio or from the Stripe Dashboard.
 
@@ -118,6 +120,8 @@ Use this guide to verify the signed-in Stripe checkout flow locally.
 ## Expected Lifecycle
 
 - Checkout API creates a `PENDING` order before redirecting to Stripe.
+- Checkout API validates billing details server-side and stores an order billing snapshot.
+- Saved billing details can be reused by the signed-in user on future checkouts.
 - Verified paid webhook events mark the order `PAID`.
 - Duplicate paid webhook events leave the order paid and clear the cart again safely.
 - Expired or failed checkout session events only cancel orders that are still `PENDING`.

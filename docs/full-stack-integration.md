@@ -54,18 +54,20 @@ Connected:
 - `/api/cart` now supports authenticated `GET`, `POST`, `PATCH`, and `DELETE` operations against Prisma cart items.
 - The client cart hydrates from the server when a user is signed in.
 - Guest users keep the existing local cart fallback.
+- Local cart items are persisted into an empty authenticated cart after sign-in so checkout can trust database cart data.
 - Cart actions optimistically update the UI and sync to the database when a session is available.
 
 Remaining blockers:
 
-- Cart merging from guest cart into a newly authenticated account can be refined after checkout rules are finalized.
-- Checkout still needs Stripe session creation and order persistence.
+- Guest-to-account cart merge behavior intentionally only fills an empty authenticated cart to avoid overwriting an existing saved bag.
 
 ## Milestone 4: Stripe Checkout And Order Updates
 
 Connected:
 
 - `POST /api/checkout` creates a Stripe Checkout session from the authenticated Prisma cart.
+- `/checkout` collects billing information, shows a trusted order summary, and presents Stripe card payment clearly.
+- Billing details are validated on the client and server, saved for reuse when requested, and snapshotted onto the order.
 - Checkout creates a pending order and order items before sending the customer to Stripe.
 - Stripe Checkout metadata links the payment session to the order and user.
 - `POST /api/stripe/webhook` verifies Stripe signatures, marks completed checkout sessions as paid, and clears the authenticated cart.
