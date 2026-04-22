@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { OrderStatus } from '@prisma/client';
 import { getCurrentSession } from '@/server/auth';
+import { checkoutRequestSchema, formatCheckoutValidationErrors } from '@/server/checkout';
 import { prisma } from '@/server/db';
 import { getAppUrl, getStripe } from '@/server/stripe';
 
@@ -28,19 +29,24 @@ async function cancelPendingOrder(orderId: string) {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await getCurrentSession();
 
   if (!session?.user?.id) {
     return NextResponse.json({ message: 'Please sign in before checkout.' }, { status: 401 });
   }
 
-  const stripe = getStripe();
+  const checkoutDetails = checkoutRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
 
-  if (!stripe) {
+  if (!checkoutDetails.success) {
     return NextResponse.json(
-      { message: 'Stripe checkout is not configured yet.' },
-      { status: 503 },
+      {
+        message: 'Please review your billing details.',
+        errors: formatCheckoutValidationErrors(checkoutDetails.error),
+      },
+      { status: 400 },
     );
   }
 
@@ -74,29 +80,80 @@ export async function POST() {
     (total, item) => total + item.product.pricePence * item.quantity,
     0,
   );
+  const { billing, paymentMethod, saveBillingInfo } = checkoutDetails.data;
+  const stripe = getStripe();
 
-  const order = await prisma.order.create({
-    data: {
-      userId: session.user.id,
-      subtotalPence,
-      totalPence: subtotalPence,
-      currency: 'GBP',
-      items: {
-        create: cartItems.map((item) => ({
-          productId: item.productId,
-          name: item.product.name,
-          pricePence: item.product.pricePence,
-          quantity: item.quantity,
-        })),
+  if (!stripe) {
+    return NextResponse.json(
+      { message: 'Stripe checkout is not configured yet.' },
+      { status: 503 },
+    );
+  }
+
+  const order = await prisma.$transaction(async (tx) => {
+    if (saveBillingInfo) {
+      await tx.billingProfile.updateMany({
+        where: {
+          userId: session.user.id,
+          isDefault: true,
+        },
+        data: {
+          isDefault: false,
+        },
+      });
+
+      await tx.billingProfile.create({
+        data: {
+          userId: session.user.id,
+          fullName: billing.fullName,
+          email: billing.email,
+          phone: billing.phone,
+          country: billing.country,
+          line1: billing.line1,
+          line2: billing.line2,
+          city: billing.city,
+          region: billing.region,
+          postcode: billing.postcode,
+          isDefault: true,
+        },
+      });
+    }
+
+    return tx.order.create({
+      data: {
+        userId: session.user.id,
+        subtotalPence,
+        totalPence: subtotalPence,
+        currency: 'GBP',
+        billingFullName: billing.fullName,
+        billingEmail: billing.email,
+        billingPhone: billing.phone,
+        billingCountry: billing.country,
+        billingLine1: billing.line1,
+        billingLine2: billing.line2,
+        billingCity: billing.city,
+        billingRegion: billing.region,
+        billingPostcode: billing.postcode,
+        items: {
+          create: cartItems.map((item) => ({
+            productId: item.productId,
+            name: item.product.name,
+            pricePence: item.product.pricePence,
+            quantity: item.quantity,
+          })),
+        },
       },
-    },
+    });
   });
 
   try {
     const appUrl = getAppUrl();
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'payment',
-      customer_email: session.user.email ?? undefined,
+      payment_method_types: [paymentMethod],
+      customer_email: billing.email,
+      client_reference_id: order.id,
+      billing_address_collection: 'auto',
       line_items: cartItems.map((item) => ({
         quantity: item.quantity,
         price_data: {
@@ -112,15 +169,19 @@ export async function POST() {
       metadata: {
         orderId: order.id,
         userId: session.user.id,
+        billingEmail: billing.email,
+        paymentMethod,
       },
       payment_intent_data: {
+        receipt_email: billing.email,
         metadata: {
           orderId: order.id,
           userId: session.user.id,
+          billingEmail: billing.email,
         },
       },
       success_url: `${appUrl}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/cart?checkout=cancelled`,
+      cancel_url: `${appUrl}/checkout?checkout=cancelled`,
     }, {
       idempotencyKey: `checkout-session:${order.id}`,
     });
