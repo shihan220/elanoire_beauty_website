@@ -92,6 +92,53 @@ export async function POST(request: Request) {
   }
 
   const items = Array.isArray(body.items) ? body.items : [];
+  const userId = await requireUserId();
+
+  if (userId && items.length > 0) {
+    const quantitiesByProductId = items.reduce<Map<string, number>>((quantities, item) => {
+      if (!item.productId) return quantities;
+
+      const quantity = Math.max(1, Math.min(Number(item.quantity) || 1, 9));
+      quantities.set(item.productId, quantity);
+
+      return quantities;
+    }, new Map<string, number>());
+    const productIds = [...quantitiesByProductId.keys()];
+    const activeProducts = await prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        active: true,
+      },
+      select: { id: true },
+    });
+    const activeProductIds = new Set(activeProducts.map((product) => product.id));
+    const validProductIds = productIds.filter((productId) => activeProductIds.has(productId));
+
+    if (validProductIds.length > 0) {
+      await prisma.$transaction(
+        validProductIds.map((productId) =>
+          prisma.cartItem.upsert({
+            where: {
+              userId_productId: {
+                userId,
+                productId,
+              },
+            },
+            update: {
+              quantity: quantitiesByProductId.get(productId) ?? 1,
+            },
+            create: {
+              userId,
+              productId,
+              quantity: quantitiesByProductId.get(productId) ?? 1,
+            },
+          }),
+        ),
+      );
+    }
+
+    return NextResponse.json(await getUserCart(userId));
+  }
 
   return NextResponse.json(calculateCartSummary(items));
 }
