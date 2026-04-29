@@ -62,6 +62,7 @@ model Product {
   name          String
   category      ProductCategory
   pricePence    Int
+  stockQuantity Int             @default(0)
   image         String
   description   String
   speed         Float           @default(0.15)
