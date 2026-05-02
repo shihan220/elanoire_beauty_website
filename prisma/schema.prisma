@@ -31,6 +31,7 @@ model User {
   passwordHash String
   firstName    String
   lastName     String
+  phoneNumber  String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   addresses    Address[]
@@ -91,9 +92,12 @@ model Address {
   id         String   @id @default(cuid())
   userId     String
   label      String
+  fullName   String?
+  phoneNumber String?
   line1      String
   line2      String?
   city       String
+  state      String?
   postcode   String
   country    String   @default("United Kingdom")
   isDefault  Boolean  @default(false)
@@ -110,6 +114,15 @@ model Order {
   totalPence              Int
   currency                String      @default("GBP")
   stripeCheckoutSessionId String?     @unique
+  billingName             String?
+  billingEmail            String?
+  billingPhoneNumber      String?
+  billingLine1            String?
+  billingLine2            String?
+  billingCity             String?
+  billingState            String?
+  billingPostcode         String?
+  billingCountry          String?
   createdAt               DateTime    @default(now())
   updatedAt               DateTime    @updatedAt
   items                   OrderItem[]
