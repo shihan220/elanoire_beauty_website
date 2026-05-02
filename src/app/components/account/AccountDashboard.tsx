@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
@@ -26,29 +26,34 @@ import type {
 } from '@/types/account';
 
 type Errors = Record<string, string>;
+type AccountSectionId = 'profile' | 'orders' | 'addresses' | 'settings';
 
 const accountSections = [
   {
+    id: 'profile',
     title: 'Profile Details',
     icon: User,
     description: 'Personal information for checkout and order communication.',
   },
   {
+    id: 'orders',
     title: 'Orders',
     icon: Package,
     description: 'A refined view of recent purchases and order progress.',
   },
   {
+    id: 'addresses',
     title: 'Saved Addresses',
     icon: MapPin,
     description: 'Delivery destinations for a faster checkout experience.',
   },
   {
+    id: 'settings',
     title: 'Settings',
     icon: Settings,
     description: 'Security and communication controls kept simple and honest.',
   },
-];
+] as const;
 
 const emptyAddressInput: AccountAddressInput = {
   label: '',
@@ -305,7 +310,7 @@ function ProfileSection({
   }
 
   return (
-    <section id="profile" className="border-t border-stone-200 pt-12">
+    <section id="profile" className="space-y-10">
       <SectionHeading
         eyebrow="Profile"
         title="Profile Details"
@@ -393,7 +398,7 @@ function ProfileSection({
 
 function OrdersSection({ orders }: { orders: AccountOrder[] }) {
   return (
-    <section id="orders" className="border-t border-stone-200 pt-12">
+    <section id="orders" className="space-y-10">
       <SectionHeading
         eyebrow="Orders"
         title="Orders"
@@ -718,7 +723,7 @@ function SavedAddressesSection({
   }
 
   return (
-    <section id="addresses" className="border-t border-stone-200 pt-12">
+    <section id="addresses" className="space-y-10">
       <SectionHeading
         eyebrow="Delivery"
         title="Saved Addresses"
@@ -838,7 +843,7 @@ function SavedAddressesSection({
 
 function SettingsSection() {
   return (
-    <section id="settings" className="border-t border-stone-200 pt-12">
+    <section id="settings" className="space-y-10">
       <SectionHeading
         eyebrow="Settings"
         title="Settings"
@@ -893,11 +898,49 @@ function SettingsSection() {
 export function AccountDashboard({ initialData }: { initialData: AccountDashboardData }) {
   const [profile, setProfile] = useState(initialData.profile);
   const [addresses, setAddresses] = useState(initialData.addresses);
+  const [activeSection, setActiveSection] = useState<AccountSectionId>('profile');
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  const sectionMeta: Record<AccountSectionId, string> = {
+    profile: profile.email,
+    orders: initialData.orders.length === 0
+      ? 'No orders yet'
+      : `${initialData.orders.length} order${initialData.orders.length === 1 ? '' : 's'}`,
+    addresses: addresses.length === 0
+      ? 'No saved addresses'
+      : `${addresses.length} saved address${addresses.length === 1 ? '' : 'es'}`,
+    settings: 'Security & preferences',
+  };
+
+  function renderActiveSection() {
+    switch (activeSection) {
+      case 'profile':
+        return <ProfileSection profile={profile} onProfileUpdate={setProfile} />;
+      case 'orders':
+        return <OrdersSection orders={initialData.orders} />;
+      case 'addresses':
+        return (
+          <SavedAddressesSection
+            profile={profile}
+            addresses={addresses}
+            onAddressesUpdate={setAddresses}
+          />
+        );
+      case 'settings':
+        return <SettingsSection />;
+      default:
+        return null;
+    }
+  }
+
+  useEffect(() => {
+    panelRef.current?.scrollTo({ top: 0 });
+  }, [activeSection]);
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-[0.85fr_1.15fr] gap-16 lg:gap-24 items-start mb-24">
-        <div>
+      <div className="grid grid-cols-1 gap-10 lg:gap-14 items-start mb-14 lg:mb-16">
+        <div className="max-w-2xl">
           <span className="text-xs font-medium tracking-[0.35em] uppercase text-stone-500 mb-6 block">
             Account
           </span>
@@ -909,31 +952,78 @@ export function AccountDashboard({ initialData }: { initialData: AccountDashboar
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
+          role="tablist"
+          aria-label="Account dashboard sections"
+        >
           {accountSections.map((section) => {
             const Icon = section.icon;
+            const isActive = section.id === activeSection;
 
             return (
-              <div key={section.title} className="border-t border-stone-300 pt-6">
-                <Icon size={22} strokeWidth={1.5} className="text-stone-900 mb-6" />
-                <h2 className="text-xl font-serif text-stone-900 mb-3">
-                  {section.title}
-                </h2>
-                <p className="text-sm text-stone-600 font-light leading-relaxed">
+              <button
+                key={section.id}
+                type="button"
+                role="tab"
+                id={`account-tab-${section.id}`}
+                aria-controls={`account-panel-${section.id}`}
+                aria-selected={isActive}
+                tabIndex={isActive ? 0 : -1}
+                onClick={() => setActiveSection(section.id)}
+                className={`border p-5 text-left transition-colors ${
+                  isActive
+                    ? 'border-stone-900 bg-stone-900 text-[#faf9f6]'
+                    : 'border-stone-200 bg-white/75 text-stone-900 hover:border-stone-400 hover:bg-white'
+                }`}
+              >
+                <Icon
+                  size={20}
+                  strokeWidth={1.5}
+                  className={`mb-5 ${isActive ? 'text-[#faf9f6]' : 'text-stone-900'}`}
+                />
+                <h2 className="text-lg md:text-xl font-serif mb-2">{section.title}</h2>
+                <p className={`text-sm font-light leading-relaxed ${isActive ? 'text-stone-200' : 'text-stone-600'}`}>
                   {section.description}
                 </p>
-              </div>
+                <span className={`mt-5 block text-xs tracking-[0.18em] uppercase ${isActive ? 'text-stone-300' : 'text-stone-500'}`}>
+                  {sectionMeta[section.id]}
+                </span>
+              </button>
             );
           })}
         </div>
       </div>
 
-      <div className="space-y-20">
-        <ProfileSection profile={profile} onProfileUpdate={setProfile} />
-        <OrdersSection orders={initialData.orders} />
-        <SavedAddressesSection profile={profile} addresses={addresses} onAddressesUpdate={setAddresses} />
-        <SettingsSection />
-      </div>
+      <section
+        ref={panelRef}
+        className="border border-stone-200 bg-white/80 p-6 md:p-8 xl:p-10 xl:max-h-[calc(100vh-9rem)] xl:overflow-y-auto"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 border-b border-stone-200 pb-8 mb-8">
+          <div>
+            <span className="text-xs tracking-[0.2em] uppercase text-stone-500 block mb-3">
+              Signed in
+            </span>
+            <p className="text-base font-serif text-stone-900">{profile.fullName}</p>
+            <p className="mt-2 text-sm text-stone-600 font-light">{profile.email}</p>
+            <div className="mt-4 flex items-center gap-3 text-sm text-stone-600 font-light">
+              <Clock3 size={16} strokeWidth={1.5} className="text-stone-500" />
+              <span>Member since {formatDate(profile.createdAt)}</span>
+            </div>
+          </div>
+          <span className="text-xs tracking-[0.2em] uppercase text-stone-500">
+            Dashboard
+          </span>
+        </div>
+
+        <div
+          role="tabpanel"
+          id={`account-panel-${activeSection}`}
+          aria-labelledby={`account-tab-${activeSection}`}
+        >
+          {renderActiveSection()}
+        </div>
+      </section>
     </>
   );
 }
