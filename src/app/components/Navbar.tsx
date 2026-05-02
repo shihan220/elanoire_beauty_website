@@ -3,9 +3,61 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag, Search, User, Menu, X } from 'lucide-react';
+import { ChevronDown, ShoppingBag, Search, User, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from './cart/CartProvider';
+
+type DesktopDropdownLink = {
+  label: string;
+  href: string;
+};
+
+type DesktopNavItem = {
+  label: string;
+  href: string;
+  dropdownTitle?: string;
+  dropdownDescription?: string;
+  dropdownLinks?: DesktopDropdownLink[];
+};
+
+const desktopNavItems: DesktopNavItem[] = [
+  {
+    label: 'Shop',
+    href: '/products',
+  },
+  {
+    label: 'Skincare',
+    href: '/skincare',
+    dropdownTitle: 'Skincare Edit',
+    dropdownDescription: 'Refined essentials for cleansing, treatment, hydration, and daily protection.',
+    dropdownLinks: [
+      { label: 'Cleansers', href: '/skincare?search=cleanser' },
+      { label: 'Toners', href: '/skincare?search=toner' },
+      { label: 'Serums', href: '/skincare?search=serum' },
+      { label: 'Moisturisers', href: '/skincare?search=cream' },
+      { label: 'Sunscreen', href: '/skincare?search=sunscreen' },
+      { label: 'Face Masks', href: '/skincare?search=mask' },
+    ],
+  },
+  {
+    label: 'Makeup',
+    href: '/makeup',
+    dropdownTitle: 'Makeup Edit',
+    dropdownDescription: 'Quietly polished colour across complexion, lips, lashes, cheeks, and eyes.',
+    dropdownLinks: [
+      { label: 'Foundation', href: '/makeup?search=foundation' },
+      { label: 'Concealer', href: '/makeup?search=concealer' },
+      { label: 'Lipstick', href: '/makeup?search=lipstick' },
+      { label: 'Mascara', href: '/makeup?search=mascara' },
+      { label: 'Blush', href: '/makeup?search=blush' },
+      { label: 'Eyeshadow', href: '/makeup?search=eyeshadow' },
+    ],
+  },
+  {
+    label: 'About',
+    href: '/#philosophy',
+  },
+];
 
 export function Navbar() {
   const router = useRouter();
@@ -30,6 +82,11 @@ export function Navbar() {
     setSearchOpen(false);
     setMobileMenuOpen(false);
     router.push(query ? `/products?search=${encodeURIComponent(query)}` : '/products');
+  }
+
+  function closeMobileMenus() {
+    setMobileMenuOpen(false);
+    setSearchOpen(false);
   }
 
   return (
@@ -57,11 +114,72 @@ export function Navbar() {
             </button>
           </div>
 
-          <nav className="hidden md:flex items-center gap-8">
-            <Link href="/products" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Shop</Link>
-            <Link href="/skincare" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Skincare</Link>
-            <Link href="/makeup" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">Makeup</Link>
-            <Link href="/#philosophy" className="text-sm tracking-widest uppercase hover:text-stone-500 transition-colors">About</Link>
+          <nav className="hidden md:block" aria-label="Primary navigation">
+            <ul className="flex items-center gap-8">
+              {desktopNavItems.map((item) => {
+                const hasDropdown = Boolean(item.dropdownLinks?.length);
+
+                return (
+                  <li key={item.label} className={`relative ${hasDropdown ? 'group/nav-item' : ''}`}>
+                    <Link
+                      href={item.href}
+                      className="inline-flex items-center gap-2 py-3 text-sm tracking-widest uppercase text-stone-900 hover:text-stone-500 focus-visible:text-stone-500 transition-colors"
+                      aria-haspopup={hasDropdown ? 'menu' : undefined}
+                    >
+                      <span>{item.label}</span>
+                      {hasDropdown ? (
+                        <ChevronDown
+                          size={14}
+                          strokeWidth={1.5}
+                          className="text-stone-400 transition-transform duration-300 group-hover/nav-item:rotate-180 group-focus-within/nav-item:rotate-180"
+                        />
+                      ) : null}
+                    </Link>
+
+                    {hasDropdown ? (
+                      <div className="pointer-events-none absolute left-1/2 top-full z-[70] w-[32rem] -translate-x-1/2 pt-4 group-hover/nav-item:pointer-events-auto group-focus-within/nav-item:pointer-events-auto">
+                        <div className="invisible translate-y-2 opacity-0 transition-all duration-300 ease-out group-hover/nav-item:visible group-hover/nav-item:translate-y-0 group-hover/nav-item:opacity-100 group-focus-within/nav-item:visible group-focus-within/nav-item:translate-y-0 group-focus-within/nav-item:opacity-100">
+                          <div className="border border-stone-200 bg-[#faf9f6]/95 backdrop-blur-md shadow-[0_24px_60px_rgba(41,37,36,0.08)]">
+                            <div className="grid grid-cols-[0.88fr_1.12fr] gap-10 p-7">
+                              <div className="border-r border-stone-200 pr-8">
+                                <span className="text-[0.65rem] tracking-[0.28em] uppercase text-stone-500 block mb-3">
+                                  {item.label}
+                                </span>
+                                <h2 className="text-2xl font-serif text-stone-900 mb-4">
+                                  {item.dropdownTitle}
+                                </h2>
+                                <p className="text-sm text-stone-600 font-light leading-relaxed">
+                                  {item.dropdownDescription}
+                                </p>
+                                <Link
+                                  href={item.href}
+                                  className="inline-flex items-center gap-2 mt-6 text-xs tracking-[0.2em] uppercase text-stone-900 border-b border-stone-900 pb-1 hover:text-stone-500 hover:border-stone-500 transition-colors"
+                                >
+                                  Shop {item.label}
+                                </Link>
+                              </div>
+
+                              <ul className="grid grid-cols-2 gap-x-8 gap-y-4" aria-label={`${item.label} categories`}>
+                                {item.dropdownLinks?.map((dropdownLink) => (
+                                  <li key={dropdownLink.label}>
+                                    <Link
+                                      href={dropdownLink.href}
+                                      className="block border-b border-stone-200 pb-3 text-sm text-stone-700 hover:text-stone-900 hover:border-stone-900 focus-visible:text-stone-900 focus-visible:border-stone-900 transition-colors"
+                                    >
+                                      {dropdownLink.label}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
           </nav>
 
           <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
@@ -162,15 +280,15 @@ export function Navbar() {
               </div>
               
               <nav className="flex flex-col gap-6">
-                <Link href="/products" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Shop All</Link>
-                <Link href="/skincare" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Skincare</Link>
-                <Link href="/makeup" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Makeup</Link>
-                <Link href="/#philosophy" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">About Us</Link>
-                <Link href="/#contact" className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Contact</Link>
+                <Link href="/products" onClick={closeMobileMenus} className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Shop All</Link>
+                <Link href="/skincare" onClick={closeMobileMenus} className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Skincare</Link>
+                <Link href="/makeup" onClick={closeMobileMenus} className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Makeup</Link>
+                <Link href="/#philosophy" onClick={closeMobileMenus} className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">About Us</Link>
+                <Link href="/#contact" onClick={closeMobileMenus} className="text-lg tracking-wider uppercase text-stone-900 pb-4 border-b border-stone-200">Contact</Link>
               </nav>
 
               <div className="mt-auto absolute bottom-8 left-8 right-8 flex gap-4 pt-8 border-t border-stone-200">
-                <Link href="/sign-in" className="flex items-center gap-2 text-sm uppercase tracking-widest text-stone-500">
+                <Link href="/sign-in" onClick={closeMobileMenus} className="flex items-center gap-2 text-sm uppercase tracking-widest text-stone-500">
                   <User size={18} strokeWidth={1.5} />
                   Account
                 </Link>
