@@ -31,17 +31,18 @@ enum NewsletterStatus {
 }
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String
-  firstName    String
-  lastName     String
-  phoneNumber  String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  addresses    Address[]
-  cartItems    CartItem[]
-  orders       Order[]
+  id              String           @id @default(cuid())
+  email           String           @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  phoneNumber     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  addresses       Address[]
+  billingProfiles BillingProfile[]
+  cartItems       CartItem[]
+  orders          Order[]
 }
 
 model AuthChallenge {
@@ -94,21 +95,41 @@ model CartItem {
 }
 
 model Address {
-  id         String   @id @default(cuid())
-  userId     String
-  label      String
-  fullName   String?
+  id          String   @id @default(cuid())
+  userId      String
+  label       String
+  fullName    String?
   phoneNumber String?
-  line1      String
-  line2      String?
-  city       String
-  state      String?
-  postcode   String
-  country    String   @default("United Kingdom")
-  isDefault  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  line1       String
+  line2       String?
+  city        String
+  state       String?
+  postcode    String
+  country     String   @default("United Kingdom")
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BillingProfile {
+  id        String   @id @default(cuid())
+  userId    String
+  fullName  String
+  email     String
+  phone     String
+  country   String
+  line1     String
+  line2     String?
+  city      String
+  region    String
+  postcode  String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isDefault])
 }
 
 model Order {
@@ -135,13 +156,13 @@ model Order {
 }
 
 model OrderItem {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   orderId    String
   productId  String?
   name       String
   pricePence Int
   quantity   Int
-  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }
 

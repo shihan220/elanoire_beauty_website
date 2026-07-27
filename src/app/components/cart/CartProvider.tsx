@@ -79,8 +79,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems(buildLineItems(localItems));
     setHasLoadedCart(true);
 
-    syncCart('GET').then((serverCart) => {
+    syncCart('GET').then(async (serverCart) => {
       if (!serverCart) return;
+
+      if (serverCart.items.length === 0 && localItems.length > 0) {
+        const syncedCart = await syncCart('POST', { items: localItems });
+
+        if (syncedCart) {
+          setItems(syncedCart.items);
+          return;
+        }
+      }
+
       setItems(serverCart.items);
     }).catch(() => undefined);
   }, []);
