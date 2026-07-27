@@ -3,6 +3,7 @@ import { OrderStatus } from '@prisma/client';
 import { getCurrentSession } from '@/server/auth';
 import { checkoutRequestSchema, formatCheckoutValidationErrors } from '@/server/checkout';
 import { prisma } from '@/server/db';
+import { releaseOrderStock, reserveOrderStock, StockUnavailableError } from '@/server/order-stock';
 import { getAppUrl, getStripe } from '@/server/stripe';
 
 export const runtime = 'nodejs';
@@ -14,12 +15,29 @@ function getErrorMessage(error: unknown) {
 
 async function cancelPendingOrder(orderId: string) {
   try {
-    await prisma.order.updateMany({
-      where: {
-        id: orderId,
-        status: OrderStatus.PENDING,
-      },
-      data: { status: OrderStatus.CANCELLED },
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: {
+          items: {
+            select: {
+              productId: true,
+              quantity: true,
+            },
+          },
+        },
+      });
+      const cancelled = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          status: OrderStatus.PENDING,
+        },
+        data: { status: OrderStatus.CANCELLED },
+      });
+
+      if (cancelled.count > 0 && order) {
+        await releaseOrderStock(tx, order.items);
+      }
     });
   } catch (error) {
     console.error('Failed to cancel pending checkout order.', {
@@ -61,7 +79,11 @@ export async function POST(request: Request) {
   }
 
   const invalidCartItems = cartItems.filter(
-    (item) => item.quantity < 1 || item.quantity > 9 || !item.product.active,
+    (item) =>
+      item.quantity < 1 ||
+      item.quantity > 9 ||
+      !item.product.active ||
+      item.product.stockQuantity < item.quantity,
   );
 
   if (invalidCartItems.length > 0) {
@@ -90,61 +112,93 @@ export async function POST(request: Request) {
     );
   }
 
-  const order = await prisma.$transaction(async (tx) => {
-    if (saveBillingInfo) {
-      await tx.billingProfile.updateMany({
-        where: {
-          userId: session.user.id,
-          isDefault: true,
-        },
-        data: {
-          isDefault: false,
-        },
-      });
+  let order: { id: string };
 
-      await tx.billingProfile.create({
+  try {
+    order = await prisma.$transaction(async (tx) => {
+      await reserveOrderStock(
+        tx,
+        cartItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+        })),
+      );
+
+      if (saveBillingInfo) {
+        await tx.billingProfile.updateMany({
+          where: {
+            userId: session.user.id,
+            isDefault: true,
+          },
+          data: {
+            isDefault: false,
+          },
+        });
+
+        await tx.billingProfile.create({
+          data: {
+            userId: session.user.id,
+            fullName: billing.fullName,
+            email: billing.email,
+            phone: billing.phone,
+            country: billing.country,
+            line1: billing.line1,
+            line2: billing.line2,
+            city: billing.city,
+            region: billing.region,
+            postcode: billing.postcode,
+            isDefault: true,
+          },
+        });
+      }
+
+      return tx.order.create({
         data: {
           userId: session.user.id,
-          fullName: billing.fullName,
-          email: billing.email,
-          phone: billing.phone,
-          country: billing.country,
-          line1: billing.line1,
-          line2: billing.line2,
-          city: billing.city,
-          region: billing.region,
-          postcode: billing.postcode,
-          isDefault: true,
+          subtotalPence,
+          totalPence: subtotalPence,
+          currency: 'GBP',
+          billingName: billing.fullName,
+          billingEmail: billing.email,
+          billingPhoneNumber: billing.phone,
+          billingCountry: billing.country,
+          billingLine1: billing.line1,
+          billingLine2: billing.line2,
+          billingCity: billing.city,
+          billingState: billing.region,
+          billingPostcode: billing.postcode,
+          items: {
+            create: cartItems.map((item) => ({
+              productId: item.productId,
+              name: item.product.name,
+              pricePence: item.product.pricePence,
+              quantity: item.quantity,
+            })),
+          },
+        },
+        select: {
+          id: true,
         },
       });
+    });
+  } catch (error) {
+    if (error instanceof StockUnavailableError) {
+      return NextResponse.json(
+        { message: 'One or more products in your bag are no longer available in that quantity.' },
+        { status: 409 },
+      );
     }
 
-    return tx.order.create({
-      data: {
-        userId: session.user.id,
-        subtotalPence,
-        totalPence: subtotalPence,
-        currency: 'GBP',
-        billingName: billing.fullName,
-        billingEmail: billing.email,
-        billingPhoneNumber: billing.phone,
-        billingCountry: billing.country,
-        billingLine1: billing.line1,
-        billingLine2: billing.line2,
-        billingCity: billing.city,
-        billingState: billing.region,
-        billingPostcode: billing.postcode,
-        items: {
-          create: cartItems.map((item) => ({
-            productId: item.productId,
-            name: item.product.name,
-            pricePence: item.product.pricePence,
-            quantity: item.quantity,
-          })),
-        },
-      },
+    console.error('Checkout order creation failed.', {
+      userId: session.user.id,
+      error: getErrorMessage(error),
     });
-  });
+
+    return NextResponse.json(
+      { message: 'Checkout could not be prepared. Please try again.' },
+      { status: 500 },
+    );
+  }
 
   try {
     const appUrl = getAppUrl();

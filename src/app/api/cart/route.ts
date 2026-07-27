@@ -45,7 +45,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Authentication required.' }, { status: 401 });
     }
 
-    const quantity = Math.max(1, Math.min(Number(body.quantity) || 1, 9));
+    const product = await prisma.product.findFirst({
+      where: {
+        id: body.productId,
+        active: true,
+        stockQuantity: { gt: 0 },
+      },
+      select: { stockQuantity: true },
+    });
+
+    if (!product) {
+      return NextResponse.json(
+        { message: 'This product is not available right now.' },
+        { status: 409 },
+      );
+    }
+
+    const quantity = Math.max(1, Math.min(Number(body.quantity) || 1, 9, product.stockQuantity));
 
     await prisma.cartItem.upsert({
       where: {
@@ -76,7 +92,9 @@ export async function POST(request: Request) {
       select: { quantity: true },
     });
 
-    if (item && item.quantity > 9) {
+    const maxQuantity = Math.min(9, product.stockQuantity);
+
+    if (item && item.quantity > maxQuantity) {
       await prisma.cartItem.update({
         where: {
           userId_productId: {
@@ -84,7 +102,7 @@ export async function POST(request: Request) {
             productId: body.productId,
           },
         },
-        data: { quantity: 9 },
+        data: { quantity: maxQuantity },
       });
     }
 
@@ -108,32 +126,38 @@ export async function POST(request: Request) {
       where: {
         id: { in: productIds },
         active: true,
+        stockQuantity: { gt: 0 },
       },
-      select: { id: true },
+      select: { id: true, stockQuantity: true },
     });
-    const activeProductIds = new Set(activeProducts.map((product) => product.id));
-    const validProductIds = productIds.filter((productId) => activeProductIds.has(productId));
+    const stockByProductId = new Map(
+      activeProducts.map((product) => [product.id, product.stockQuantity]),
+    );
+    const validProductIds = productIds.filter((productId) => stockByProductId.has(productId));
 
     if (validProductIds.length > 0) {
       await prisma.$transaction(
-        validProductIds.map((productId) =>
-          prisma.cartItem.upsert({
+        validProductIds.map((productId) => {
+          const quantity = Math.min(
+            quantitiesByProductId.get(productId) ?? 1,
+            stockByProductId.get(productId) ?? 1,
+          );
+
+          return prisma.cartItem.upsert({
             where: {
               userId_productId: {
                 userId,
                 productId,
               },
             },
-            update: {
-              quantity: quantitiesByProductId.get(productId) ?? 1,
-            },
+            update: { quantity },
             create: {
               userId,
               productId,
-              quantity: quantitiesByProductId.get(productId) ?? 1,
+              quantity,
             },
-          }),
-        ),
+          });
+        }),
       );
     }
 
@@ -166,6 +190,24 @@ export async function PATCH(request: Request) {
       },
     });
   } else {
+    const product = await prisma.product.findFirst({
+      where: {
+        id: body.productId,
+        active: true,
+        stockQuantity: { gt: 0 },
+      },
+      select: { stockQuantity: true },
+    });
+
+    if (!product) {
+      return NextResponse.json(
+        { message: 'This product is not available right now.' },
+        { status: 409 },
+      );
+    }
+
+    const nextQuantity = Math.min(quantity, product.stockQuantity);
+
     await prisma.cartItem.upsert({
       where: {
         userId_productId: {
@@ -173,11 +215,11 @@ export async function PATCH(request: Request) {
           productId: body.productId,
         },
       },
-      update: { quantity },
+      update: { quantity: nextQuantity },
       create: {
         userId,
         productId: body.productId,
-        quantity,
+        quantity: nextQuantity,
       },
     });
   }

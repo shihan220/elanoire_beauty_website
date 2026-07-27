@@ -50,6 +50,24 @@ function normaliseItems(items: CartLineItem[]) {
   }));
 }
 
+function mergeStoredCartItems(leftItems: StoredCartItem[], rightItems: StoredCartItem[]) {
+  const quantities = new Map<string, number>();
+
+  for (const item of [...leftItems, ...rightItems]) {
+    if (!item.productId) continue;
+
+    quantities.set(
+      item.productId,
+      Math.min((quantities.get(item.productId) ?? 0) + item.quantity, 9),
+    );
+  }
+
+  return [...quantities.entries()].map(([productId, quantity]) => ({
+    productId,
+    quantity,
+  }));
+}
+
 async function syncCart(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>) {
   const response = await fetch('/api/cart', {
     method,
@@ -82,8 +100,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     syncCart('GET').then(async (serverCart) => {
       if (!serverCart) return;
 
-      if (serverCart.items.length === 0 && localItems.length > 0) {
-        const syncedCart = await syncCart('POST', { items: localItems });
+      if (localItems.length > 0) {
+        const mergedItems = mergeStoredCartItems(
+          normaliseItems(serverCart.items),
+          localItems,
+        );
+        const syncedCart = await syncCart('POST', { items: mergedItems });
 
         if (syncedCart) {
           setItems(syncedCart.items);

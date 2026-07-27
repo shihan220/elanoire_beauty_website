@@ -77,6 +77,14 @@ export function AdminLoginForm({ credentialHint }: { credentialHint: LoginHint }
         <p className="text-xs tracking-[0.24em] uppercase text-stone-500">Admin Access</p>
       </div>
 
+      {credentialHint.mode === 'unconfigured' ? (
+        <div className="mb-8 border border-stone-200 bg-[#faf9f6] p-5">
+          <p className="text-sm text-stone-600 font-light leading-relaxed">
+            Admin login is not configured yet. Add admin credentials in the server environment before using this area.
+          </p>
+        </div>
+      ) : null}
+
       {credentialHint.mode === 'mock' ? (
         <div className="mb-8 border border-stone-200 bg-[#faf9f6] p-5">
           <p className="text-sm text-stone-600 font-light leading-relaxed">
@@ -128,7 +136,7 @@ export function AdminLoginForm({ credentialHint }: { credentialHint: LoginHint }
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || credentialHint.mode === 'unconfigured'}
           className="w-full bg-stone-900 text-[#faf9f6] py-4 px-8 flex items-center justify-center gap-3 text-sm tracking-[0.2em] uppercase hover:bg-stone-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
         >
           {isSubmitting ? 'Opening Dashboard' : 'Sign In'}

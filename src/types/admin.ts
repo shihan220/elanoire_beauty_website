@@ -1,4 +1,4 @@
-export type AdminAuthMode = 'configured' | 'mock';
+export type AdminAuthMode = 'configured' | 'mock' | 'unconfigured';
 export type AdminDataMode = 'database' | 'mock';
 export type AdminProductCategory = 'SKINCARE' | 'MAKEUP' | 'FRAGRANCE';
 export type NewsletterStatusLabel = 'Active' | 'Paused';

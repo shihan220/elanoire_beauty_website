@@ -86,6 +86,14 @@ export function getAdminCredentialConfig() {
     };
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    return {
+      mode: 'unconfigured' as AdminAuthMode,
+      email: '',
+      password: '',
+    };
+  }
+
   return {
     mode: 'mock' as AdminAuthMode,
     email: fallbackAdminCredentials.email,
@@ -113,6 +121,11 @@ export function getAdminLoginHint() {
 
 export function validateAdminCredentials(email: string, password: string) {
   const config = getAdminCredentialConfig();
+
+  if (config.mode === 'unconfigured') {
+    return false;
+  }
+
   const normalisedEmail = email.trim().toLowerCase();
 
   return (
