@@ -5,6 +5,15 @@ import { adminLoginSchema, formatAdminValidationErrors } from '@/server/admin/sc
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
+  const credentialConfig = getAdminCredentialConfig();
+
+  if (credentialConfig.mode === 'unconfigured') {
+    return NextResponse.json(
+      { message: 'Admin login is not configured yet.' },
+      { status: 503 },
+    );
+  }
+
   const parsedBody = adminLoginSchema.safeParse(await request.json().catch(() => null));
 
   if (!parsedBody.success) {
@@ -28,7 +37,7 @@ export async function POST(request: Request) {
 
   const response = NextResponse.json({
     ok: true,
-    mode: getAdminCredentialConfig().mode,
+    mode: credentialConfig.mode,
   });
 
   response.cookies.set(

@@ -1,9 +1,9 @@
 import { OrderStatus } from '@prisma/client';
-import { mockNewsletterUpdates } from '@/data/admin/mock-newsletter-updates';
 import { mockSalesSnapshot } from '@/data/admin/mock-sales';
-import type { AdminDashboardData, AdminDataMode, AdminSalesSnapshot } from '@/types/admin';
+import type { AdminCustomerOrder, AdminDashboardData, AdminDataMode, AdminSalesSnapshot } from '@/types/admin';
 import { prisma } from '../db';
 import { listAdminProducts } from './catalog';
+import { listAdminNewsletterUpdates } from './newsletter';
 
 function canUseDatabase() {
   return Boolean(process.env.DATABASE_URL);
@@ -22,6 +22,107 @@ function formatWeekLabel(date: Date) {
     month: 'short',
     day: 'numeric',
   }).format(date);
+}
+
+function periodStart(daysAgo: number) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+  return date.getTime();
+}
+
+function yearStart() {
+  const date = new Date();
+  date.setMonth(0, 1);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function buildBillingSummary(order: {
+  billingName: string | null;
+  billingEmail: string | null;
+  billingLine1: string | null;
+  billingCity: string | null;
+  billingState: string | null;
+  billingPostcode: string | null;
+  billingCountry: string | null;
+}) {
+  const lines = [
+    order.billingName,
+    order.billingEmail,
+    order.billingLine1,
+    [order.billingCity, order.billingState, order.billingPostcode].filter(Boolean).join(', '),
+    order.billingCountry,
+  ].filter(Boolean);
+
+  return lines.length > 0 ? lines.join(' / ') : null;
+}
+
+function mapCustomerOrder(order: {
+  id: string;
+  status: OrderStatus;
+  subtotalPence: number;
+  totalPence: number;
+  currency: string;
+  createdAt: Date;
+  billingName: string | null;
+  billingEmail: string | null;
+  billingLine1: string | null;
+  billingCity: string | null;
+  billingState: string | null;
+  billingPostcode: string | null;
+  billingCountry: string | null;
+  user: {
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    pricePence: number;
+  }>;
+}) {
+  return {
+    id: order.id,
+    customerName: `${order.user.firstName} ${order.user.lastName}`.trim(),
+    customerEmail: order.user.email,
+    totalPence: order.totalPence,
+    subtotalPence: order.subtotalPence,
+    currency: order.currency,
+    status: order.status,
+    createdAt: order.createdAt.toISOString(),
+    billingSummary: buildBillingSummary(order),
+    items: order.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      pricePence: item.pricePence,
+    })),
+  } satisfies AdminCustomerOrder;
+}
+
+function buildMockCustomerOrders() {
+  return mockSalesSnapshot.recentOrders.map((order) => ({
+    id: order.id,
+    customerName: order.customerName,
+    customerEmail: order.customerEmail,
+    totalPence: order.totalPence,
+    subtotalPence: order.totalPence,
+    currency: 'GBP',
+    status: order.status,
+    createdAt: order.createdAt,
+    billingSummary: null,
+    items: [
+      {
+        id: `${order.id}-item`,
+        name: 'Sample order item',
+        quantity: order.itemCount,
+        pricePence: order.totalPence,
+      },
+    ],
+  })) satisfies AdminCustomerOrder[];
 }
 
 async function getDatabaseSalesSnapshot() {
@@ -44,6 +145,10 @@ async function getDatabaseSalesSnapshot() {
   });
 
   const now = Date.now();
+  const dailyCutoff = periodStart(0);
+  const weeklyCutoff = periodStart(6);
+  const monthlyCutoff = periodStart(29);
+  const yearlyCutoff = yearStart();
   const last7DaysCutoff = now - 7 * 86_400_000;
   const last30DaysCutoff = now - 30 * 86_400_000;
   const bestSellerMap = new Map<string, { quantity: number; revenuePence: number }>();
@@ -91,6 +196,20 @@ async function getDatabaseSalesSnapshot() {
   return {
     totalRevenuePence: orders.reduce((total, order) => total + order.totalPence, 0),
     totalOrders: orders.length,
+    periodTotals: {
+      dailyRevenuePence: orders.reduce((total, order) => (
+        order.createdAt.getTime() >= dailyCutoff ? total + order.totalPence : total
+      ), 0),
+      weeklyRevenuePence: orders.reduce((total, order) => (
+        order.createdAt.getTime() >= weeklyCutoff ? total + order.totalPence : total
+      ), 0),
+      monthlyRevenuePence: orders.reduce((total, order) => (
+        order.createdAt.getTime() >= monthlyCutoff ? total + order.totalPence : total
+      ), 0),
+      yearlyRevenuePence: orders.reduce((total, order) => (
+        order.createdAt.getTime() >= yearlyCutoff ? total + order.totalPence : total
+      ), 0),
+    },
     last7DaysRevenuePence: orders.reduce((total, order) => (
       order.createdAt.getTime() >= last7DaysCutoff ? total + order.totalPence : total
     ), 0),
@@ -111,17 +230,40 @@ async function getDatabaseSalesSnapshot() {
   } satisfies AdminSalesSnapshot;
 }
 
+async function getDatabaseCustomerOrders() {
+  const orders = await prisma.order.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    include: {
+      items: true,
+      user: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return orders.map(mapCustomerOrder);
+}
+
 export async function getAdminDashboardData() {
   const productData = await listAdminProducts();
+  const newsletterData = await listAdminNewsletterUpdates();
   let sales = mockSalesSnapshot;
   let salesDataSource: AdminDataMode = 'mock';
+  let customerOrders: AdminCustomerOrder[] = buildMockCustomerOrders();
 
   if (canUseDatabase()) {
     try {
       sales = await getDatabaseSalesSnapshot();
+      customerOrders = await getDatabaseCustomerOrders();
       salesDataSource = 'database';
     } catch {
       sales = mockSalesSnapshot;
+      customerOrders = buildMockCustomerOrders();
       salesDataSource = 'mock';
     }
   }
@@ -131,6 +273,7 @@ export async function getAdminDashboardData() {
     salesDataSource,
     products: productData.products,
     sales,
-    newsletterUpdates: mockNewsletterUpdates,
+    customerOrders,
+    newsletterUpdates: newsletterData.updates,
   } satisfies AdminDashboardData;
 }

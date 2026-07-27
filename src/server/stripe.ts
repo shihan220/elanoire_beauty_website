@@ -6,6 +6,7 @@ export function getStripe() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
 
   if (!secretKey) return null;
+  if (secretKey.includes('replace_me')) return null;
 
   stripeClient ??= new Stripe(secretKey);
 

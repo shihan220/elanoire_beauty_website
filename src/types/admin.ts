@@ -1,6 +1,7 @@
-export type AdminAuthMode = 'configured' | 'mock';
+export type AdminAuthMode = 'configured' | 'mock' | 'unconfigured';
 export type AdminDataMode = 'database' | 'mock';
 export type AdminProductCategory = 'SKINCARE' | 'MAKEUP' | 'FRAGRANCE';
+export type NewsletterStatusLabel = 'Active' | 'Paused';
 
 export type AdminProductRecord = {
   id: string;
@@ -19,6 +20,12 @@ export type AdminProductRecord = {
 export type AdminSalesSnapshot = {
   totalRevenuePence: number;
   totalOrders: number;
+  periodTotals: {
+    dailyRevenuePence: number;
+    weeklyRevenuePence: number;
+    monthlyRevenuePence: number;
+    yearlyRevenuePence: number;
+  };
   last7DaysRevenuePence: number;
   last30DaysRevenuePence: number;
   bestSellers: Array<{
@@ -42,11 +49,29 @@ export type AdminSalesSnapshot = {
   }>;
 };
 
+export type AdminCustomerOrder = {
+  id: string;
+  customerName: string;
+  customerEmail: string;
+  totalPence: number;
+  subtotalPence: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+  billingSummary: string | null;
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    pricePence: number;
+  }>;
+};
+
 export type NewsletterUpdate = {
   id: string;
   email: string;
   subscribedAt: string;
-  status: 'Active' | 'Paused';
+  status: NewsletterStatusLabel;
   source: string;
 };
 
@@ -55,6 +80,7 @@ export type AdminDashboardData = {
   salesDataSource: AdminDataMode;
   products: AdminProductRecord[];
   sales: AdminSalesSnapshot;
+  customerOrders: AdminCustomerOrder[];
   newsletterUpdates: NewsletterUpdate[];
 };
 
@@ -65,4 +91,10 @@ export type AdminProductPayload = {
   stockQuantity: number;
   image: string;
   description: string;
+};
+
+export type AdminNewsletterPayload = {
+  email: string;
+  source: string;
+  status: NewsletterStatusLabel;
 };

@@ -3,9 +3,10 @@
 import { BarChart3, Boxes, Package, Sparkles, Users } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
-import type { AdminDashboardData, AdminProductPayload, AdminProductRecord } from '@/types/admin';
+import type { AdminDashboardData, AdminNewsletterPayload, AdminProductPayload, AdminProductRecord, NewsletterUpdate } from '@/types/admin';
 import { AdminLogoutButton } from './AdminLogoutButton';
 import { AdminSidebar } from './AdminSidebar';
+import { CustomerOrders } from './CustomerOrders';
 import { NewsletterUpdates } from './NewsletterUpdates';
 import { ProductManagementTable } from './ProductManagementTable';
 import { SalesStats } from './SalesStats';
@@ -23,6 +24,7 @@ async function readJson(response: Response) {
     message?: string;
     errors?: Record<string, string>;
     product?: AdminProductRecord;
+    update?: NewsletterUpdate;
   }>;
 }
 
@@ -35,9 +37,12 @@ export function AdminDashboard({
 }) {
   const router = useRouter();
   const [products, setProducts] = useState(initialData.products);
+  const [newsletterUpdates, setNewsletterUpdates] = useState(initialData.newsletterUpdates);
   const [bannerMessage, setBannerMessage] = useState('');
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
+  const [busyNewsletterId, setBusyNewsletterId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingNewsletter, setIsCreatingNewsletter] = useState(false);
 
   const metrics = useMemo(() => {
     const activeProducts = products.filter((product) => product.active);
@@ -48,9 +53,9 @@ export function AdminDashboard({
       totalProducts: activeProducts.length,
       lowStockProducts: lowStockProducts.length,
       outOfStockProducts: outOfStockProducts.length,
-      newsletterCount: initialData.newsletterUpdates.length,
+      newsletterCount: newsletterUpdates.length,
     };
-  }, [initialData.newsletterUpdates.length, products]);
+  }, [newsletterUpdates.length, products]);
 
   async function withAdminGuard<T>(work: () => Promise<T>): Promise<T> {
     try {
@@ -175,6 +180,118 @@ export function AdminDashboard({
     }
   }
 
+  async function createNewsletterUpdate(payload: AdminNewsletterPayload): Promise<MutationResult> {
+    setIsCreatingNewsletter(true);
+    setBannerMessage('');
+
+    try {
+      const response = await fetch('/api/admin/newsletter', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const body = await readJson(response);
+
+      if (response.status === 401) {
+        router.push('/admin/login');
+        router.refresh();
+        return { error: 'Admin session expired. Sign in again.' };
+      }
+
+      if (!response.ok || !body.update) {
+        return {
+          error: body.message ?? 'Newsletter update could not be saved.',
+          fieldErrors: body.errors,
+        };
+      }
+
+      setNewsletterUpdates((current) => {
+        const existing = current.some((entry) => entry.id === body.update?.id);
+        if (existing) {
+          return current.map((entry) => (entry.id === body.update?.id ? body.update as NewsletterUpdate : entry));
+        }
+        return [body.update as NewsletterUpdate, ...current];
+      });
+      setBannerMessage('Newsletter entry saved.');
+      return {};
+    } catch {
+      return { error: 'Newsletter update could not be saved.' };
+    } finally {
+      setIsCreatingNewsletter(false);
+    }
+  }
+
+  async function patchNewsletterUpdate(newsletterId: string, payload: AdminNewsletterPayload): Promise<MutationResult> {
+    setBusyNewsletterId(newsletterId);
+    setBannerMessage('');
+
+    try {
+      const response = await fetch(`/api/admin/newsletter/${newsletterId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const body = await readJson(response);
+
+      if (response.status === 401) {
+        router.push('/admin/login');
+        router.refresh();
+        return { error: 'Admin session expired. Sign in again.' };
+      }
+
+      if (!response.ok || !body.update) {
+        return {
+          error: body.message ?? 'Newsletter update could not be saved.',
+          fieldErrors: body.errors,
+        };
+      }
+
+      setNewsletterUpdates((current) => current.map((entry) => (
+        entry.id === newsletterId ? body.update as NewsletterUpdate : entry
+      )));
+      setBannerMessage('Newsletter entry updated.');
+      return {};
+    } catch {
+      return { error: 'Newsletter update could not be saved.' };
+    } finally {
+      setBusyNewsletterId(null);
+    }
+  }
+
+  async function deleteNewsletterUpdate(newsletterId: string): Promise<MutationResult> {
+    setBusyNewsletterId(newsletterId);
+    setBannerMessage('');
+
+    try {
+      const response = await fetch(`/api/admin/newsletter/${newsletterId}`, {
+        method: 'DELETE',
+      });
+      const body = await readJson(response);
+
+      if (response.status === 401) {
+        router.push('/admin/login');
+        router.refresh();
+        return { error: 'Admin session expired. Sign in again.' };
+      }
+
+      if (!response.ok) {
+        return { error: body.message ?? 'Newsletter entry could not be removed.' };
+      }
+
+      setNewsletterUpdates((current) => current.filter((entry) => entry.id !== newsletterId));
+      setBannerMessage('Newsletter entry removed.');
+      return {};
+    } catch {
+      return { error: 'Newsletter entry could not be removed.' };
+    } finally {
+      setBusyNewsletterId(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#faf9f6] text-stone-900 font-sans antialiased selection:bg-stone-900 selection:text-[#faf9f6]">
       <main className="max-w-[1600px] mx-auto px-6 md:px-10 py-8 md:py-10">
@@ -281,8 +398,19 @@ export function AdminDashboard({
               <SalesStats sales={initialData.sales} />
             </section>
 
+            <section id="customers">
+              <CustomerOrders orders={initialData.customerOrders} />
+            </section>
+
             <section id="newsletter">
-              <NewsletterUpdates updates={initialData.newsletterUpdates} />
+              <NewsletterUpdates
+                updates={newsletterUpdates}
+                creating={isCreatingNewsletter}
+                busyNewsletterId={busyNewsletterId}
+                onCreate={createNewsletterUpdate}
+                onUpdate={patchNewsletterUpdate}
+                onDelete={deleteNewsletterUpdate}
+              />
             </section>
 
             <section id="products">

@@ -278,6 +278,13 @@ export function ProductManagementTable({
     }),
     [products],
   );
+  const groupedProducts = useMemo(
+    () => adminCategoryOptions.map((category) => ({
+      ...category,
+      products: sortedProducts.filter((product) => product.category === category.value),
+    })),
+    [sortedProducts],
+  );
 
   async function handleCreate() {
     const parsed = parseProductPayload(createDraft);
@@ -352,11 +359,11 @@ export function ProductManagementTable({
           <span className="block text-[11px] tracking-[0.24em] uppercase text-stone-500 mb-3">
             Product Management
           </span>
-          <h3 className="text-2xl font-serif text-stone-900">Update catalogue content without leaving the dashboard</h3>
+          <h3 className="text-2xl font-serif text-stone-900">Manage product subsections and catalogue content</h3>
         </div>
         <p className="text-sm text-stone-500">
           {dataMode === 'database'
-            ? 'Changes write through to PostgreSQL-backed products.'
+            ? 'Changes write through to PostgreSQL-backed products. Move products by changing category, or remove them with confirmation.'
             : 'Database is unavailable, so this section is running in temporary mock mode.'}
         </p>
       </div>
@@ -468,34 +475,62 @@ export function ProductManagementTable({
         </button>
       </div>
 
-      <div className="space-y-6">
-        {sortedProducts.map((product) => (
-          <div key={product.id}>
-            <ProductRow
-              product={product}
-              draft={drafts[product.id] ?? draftFromProduct(product)}
-              fieldErrors={rowErrors[product.id]}
-              isBusy={busyProductId === product.id}
-              isConfirmingDelete={confirmingDeleteId === product.id}
-              onChange={(productId, key, value) => {
-                setDrafts((current) => ({
-                  ...current,
-                  [productId]: {
-                    ...(current[productId] ?? draftFromProduct(product)),
-                    [key]: value,
-                  },
-                }));
-              }}
-              onSave={handleSave}
-              onDeleteToggle={setConfirmingDeleteId}
-              onDeleteConfirm={handleDelete}
-            />
-            {rowErrors[product.id]?.general ? (
-              <p className="mt-3 text-sm text-[var(--elanoire-color-destructive)]">
-                {rowErrors[product.id]?.general}
+      <div className="space-y-8">
+        {groupedProducts.map((group) => (
+          <section key={group.value} className="border-t border-stone-200 pt-8">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-6">
+              <div>
+                <span className="block text-[11px] tracking-[0.24em] uppercase text-stone-500 mb-3">
+                  {group.label} Subsection
+                </span>
+                <h4 className="text-xl font-serif text-stone-900">
+                  {group.products.length} product{group.products.length === 1 ? '' : 's'}
+                </h4>
+              </div>
+              <p className="text-sm text-stone-500">
+                Edit products here or move them to another subsection through the category field.
               </p>
-            ) : null}
-          </div>
+            </div>
+
+            {group.products.length === 0 ? (
+              <div className="border border-stone-200 bg-white/70 p-6">
+                <p className="text-sm text-stone-600 font-light leading-relaxed">
+                  No products in this subsection yet.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {group.products.map((product) => (
+                  <div key={product.id}>
+                    <ProductRow
+                      product={product}
+                      draft={drafts[product.id] ?? draftFromProduct(product)}
+                      fieldErrors={rowErrors[product.id]}
+                      isBusy={busyProductId === product.id}
+                      isConfirmingDelete={confirmingDeleteId === product.id}
+                      onChange={(productId, key, value) => {
+                        setDrafts((current) => ({
+                          ...current,
+                          [productId]: {
+                            ...(current[productId] ?? draftFromProduct(product)),
+                            [key]: value,
+                          },
+                        }));
+                      }}
+                      onSave={handleSave}
+                      onDeleteToggle={setConfirmingDeleteId}
+                      onDeleteConfirm={handleDelete}
+                    />
+                    {rowErrors[product.id]?.general ? (
+                      <p className="mt-3 text-sm text-[var(--elanoire-color-destructive)]">
+                        {rowErrors[product.id]?.general}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         ))}
       </div>
     </section>

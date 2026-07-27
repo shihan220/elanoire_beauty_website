@@ -1,4 +1,4 @@
-import { PrismaClient, ProductCategory } from '@prisma/client';
+import { NewsletterStatus, PrismaClient, ProductCategory } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -82,6 +82,35 @@ for (const product of products) {
     where: { id: product.id },
     update: product,
     create: product,
+  });
+}
+
+const newsletterSubscriptions = [
+  {
+    email: 'olive.taylor@example.com',
+    source: 'Homepage footer form',
+    status: NewsletterStatus.ACTIVE,
+    subscribedAt: new Date('2026-04-28T09:00:00.000Z'),
+  },
+  {
+    email: 'charlotte.bennett@example.com',
+    source: 'Checkout opt-in',
+    status: NewsletterStatus.ACTIVE,
+    subscribedAt: new Date('2026-04-27T14:30:00.000Z'),
+  },
+  {
+    email: 'isla.morgan@example.com',
+    source: 'Account preferences',
+    status: NewsletterStatus.PAUSED,
+    subscribedAt: new Date('2026-04-26T18:05:00.000Z'),
+  },
+];
+
+for (const subscription of newsletterSubscriptions) {
+  await prisma.newsletterSubscription.upsert({
+    where: { email: subscription.email },
+    update: subscription,
+    create: subscription,
   });
 }
 

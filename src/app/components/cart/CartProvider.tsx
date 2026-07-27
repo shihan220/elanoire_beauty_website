@@ -50,6 +50,24 @@ function normaliseItems(items: CartLineItem[]) {
   }));
 }
 
+function mergeStoredCartItems(leftItems: StoredCartItem[], rightItems: StoredCartItem[]) {
+  const quantities = new Map<string, number>();
+
+  for (const item of [...leftItems, ...rightItems]) {
+    if (!item.productId) continue;
+
+    quantities.set(
+      item.productId,
+      Math.min((quantities.get(item.productId) ?? 0) + item.quantity, 9),
+    );
+  }
+
+  return [...quantities.entries()].map(([productId, quantity]) => ({
+    productId,
+    quantity,
+  }));
+}
+
 async function syncCart(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', body?: Record<string, unknown>) {
   const response = await fetch('/api/cart', {
     method,
@@ -79,8 +97,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems(buildLineItems(localItems));
     setHasLoadedCart(true);
 
-    syncCart('GET').then((serverCart) => {
+    syncCart('GET').then(async (serverCart) => {
       if (!serverCart) return;
+
+      if (localItems.length > 0) {
+        const mergedItems = mergeStoredCartItems(
+          normaliseItems(serverCart.items),
+          localItems,
+        );
+        const syncedCart = await syncCart('POST', { items: mergedItems });
+
+        if (syncedCart) {
+          setItems(syncedCart.items);
+          return;
+        }
+      }
+
       setItems(serverCart.items);
     }).catch(() => undefined);
   }, []);

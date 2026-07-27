@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { OrderStatus } from '@prisma/client';
 import type Stripe from 'stripe';
 import { prisma } from '@/server/db';
+import { releaseOrderStock, removePurchasedCartItems } from '@/server/order-stock';
 import { getStripe } from '@/server/stripe';
 
 export const runtime = 'nodejs';
@@ -18,6 +19,12 @@ async function getOrderForCheckoutSession(checkoutSession: Stripe.Checkout.Sessi
       id: true,
       userId: true,
       status: true,
+      items: {
+        select: {
+          productId: true,
+          quantity: true,
+        },
+      },
     },
   });
 
@@ -52,22 +59,24 @@ async function markCheckoutSessionPaid(checkoutSession: Stripe.Checkout.Session)
     return;
   }
 
-  if (order.status === OrderStatus.FULFILLED) {
+  if (order.status === OrderStatus.FULFILLED || order.status === OrderStatus.PAID) {
     return;
   }
 
-  await prisma.order.updateMany({
-    where: {
-      id: order.id,
-      status: {
-        in: [OrderStatus.PENDING, OrderStatus.CANCELLED, OrderStatus.PAID],
+  await prisma.$transaction(async (tx) => {
+    const paid = await tx.order.updateMany({
+      where: {
+        id: order.id,
+        status: OrderStatus.PENDING,
       },
-    },
-    data: { status: OrderStatus.PAID },
-  });
+      data: { status: OrderStatus.PAID },
+    });
 
-  await prisma.cartItem.deleteMany({
-    where: { userId: order.userId },
+    if (paid.count === 0) {
+      return;
+    }
+
+    await removePurchasedCartItems(tx, order.userId, order.items);
   });
 }
 
@@ -76,12 +85,18 @@ async function cancelPendingCheckoutSession(checkoutSession: Stripe.Checkout.Ses
 
   if (!order) return;
 
-  await prisma.order.updateMany({
-    where: {
-      id: order.id,
-      status: OrderStatus.PENDING,
-    },
-    data: { status: OrderStatus.CANCELLED },
+  await prisma.$transaction(async (tx) => {
+    const cancelled = await tx.order.updateMany({
+      where: {
+        id: order.id,
+        status: OrderStatus.PENDING,
+      },
+      data: { status: OrderStatus.CANCELLED },
+    });
+
+    if (cancelled.count > 0) {
+      await releaseOrderStock(tx, order.items);
+    }
   });
 }
 

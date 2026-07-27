@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { OrderStatus } from '@prisma/client';
 import { getCurrentSession } from '@/server/auth';
+import { checkoutRequestSchema, formatCheckoutValidationErrors } from '@/server/checkout';
 import { prisma } from '@/server/db';
+import { releaseOrderStock, reserveOrderStock, StockUnavailableError } from '@/server/order-stock';
 import { getAppUrl, getStripe } from '@/server/stripe';
 
 export const runtime = 'nodejs';
@@ -13,12 +15,29 @@ function getErrorMessage(error: unknown) {
 
 async function cancelPendingOrder(orderId: string) {
   try {
-    await prisma.order.updateMany({
-      where: {
-        id: orderId,
-        status: OrderStatus.PENDING,
-      },
-      data: { status: OrderStatus.CANCELLED },
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: {
+          items: {
+            select: {
+              productId: true,
+              quantity: true,
+            },
+          },
+        },
+      });
+      const cancelled = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          status: OrderStatus.PENDING,
+        },
+        data: { status: OrderStatus.CANCELLED },
+      });
+
+      if (cancelled.count > 0 && order) {
+        await releaseOrderStock(tx, order.items);
+      }
     });
   } catch (error) {
     console.error('Failed to cancel pending checkout order.', {
@@ -28,19 +47,24 @@ async function cancelPendingOrder(orderId: string) {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await getCurrentSession();
 
   if (!session?.user?.id) {
     return NextResponse.json({ message: 'Please sign in before checkout.' }, { status: 401 });
   }
 
-  const stripe = getStripe();
+  const checkoutDetails = checkoutRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
 
-  if (!stripe) {
+  if (!checkoutDetails.success) {
     return NextResponse.json(
-      { message: 'Stripe checkout is not configured yet.' },
-      { status: 503 },
+      {
+        message: 'Please review your billing details.',
+        errors: formatCheckoutValidationErrors(checkoutDetails.error),
+      },
+      { status: 400 },
     );
   }
 
@@ -55,7 +79,11 @@ export async function POST() {
   }
 
   const invalidCartItems = cartItems.filter(
-    (item) => item.quantity < 1 || item.quantity > 9 || !item.product.active,
+    (item) =>
+      item.quantity < 1 ||
+      item.quantity > 9 ||
+      !item.product.active ||
+      item.product.stockQuantity < item.quantity,
   );
 
   if (invalidCartItems.length > 0) {
@@ -74,29 +102,112 @@ export async function POST() {
     (total, item) => total + item.product.pricePence * item.quantity,
     0,
   );
+  const { billing, paymentMethod, saveBillingInfo } = checkoutDetails.data;
+  const stripe = getStripe();
 
-  const order = await prisma.order.create({
-    data: {
-      userId: session.user.id,
-      subtotalPence,
-      totalPence: subtotalPence,
-      currency: 'GBP',
-      items: {
-        create: cartItems.map((item) => ({
+  if (!stripe) {
+    return NextResponse.json(
+      { message: 'Stripe checkout is not configured yet.' },
+      { status: 503 },
+    );
+  }
+
+  let order: { id: string };
+
+  try {
+    order = await prisma.$transaction(async (tx) => {
+      await reserveOrderStock(
+        tx,
+        cartItems.map((item) => ({
           productId: item.productId,
-          name: item.product.name,
-          pricePence: item.product.pricePence,
           quantity: item.quantity,
         })),
-      },
-    },
-  });
+      );
+
+      if (saveBillingInfo) {
+        await tx.billingProfile.updateMany({
+          where: {
+            userId: session.user.id,
+            isDefault: true,
+          },
+          data: {
+            isDefault: false,
+          },
+        });
+
+        await tx.billingProfile.create({
+          data: {
+            userId: session.user.id,
+            fullName: billing.fullName,
+            email: billing.email,
+            phone: billing.phone,
+            country: billing.country,
+            line1: billing.line1,
+            line2: billing.line2,
+            city: billing.city,
+            region: billing.region,
+            postcode: billing.postcode,
+            isDefault: true,
+          },
+        });
+      }
+
+      return tx.order.create({
+        data: {
+          userId: session.user.id,
+          subtotalPence,
+          totalPence: subtotalPence,
+          currency: 'GBP',
+          billingName: billing.fullName,
+          billingEmail: billing.email,
+          billingPhoneNumber: billing.phone,
+          billingCountry: billing.country,
+          billingLine1: billing.line1,
+          billingLine2: billing.line2,
+          billingCity: billing.city,
+          billingState: billing.region,
+          billingPostcode: billing.postcode,
+          items: {
+            create: cartItems.map((item) => ({
+              productId: item.productId,
+              name: item.product.name,
+              pricePence: item.product.pricePence,
+              quantity: item.quantity,
+            })),
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof StockUnavailableError) {
+      return NextResponse.json(
+        { message: 'One or more products in your bag are no longer available in that quantity.' },
+        { status: 409 },
+      );
+    }
+
+    console.error('Checkout order creation failed.', {
+      userId: session.user.id,
+      error: getErrorMessage(error),
+    });
+
+    return NextResponse.json(
+      { message: 'Checkout could not be prepared. Please try again.' },
+      { status: 500 },
+    );
+  }
 
   try {
     const appUrl = getAppUrl();
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'payment',
-      customer_email: session.user.email ?? undefined,
+      payment_method_types: [paymentMethod],
+      customer_email: billing.email,
+      client_reference_id: order.id,
+      billing_address_collection: 'auto',
       line_items: cartItems.map((item) => ({
         quantity: item.quantity,
         price_data: {
@@ -112,15 +223,19 @@ export async function POST() {
       metadata: {
         orderId: order.id,
         userId: session.user.id,
+        billingEmail: billing.email,
+        paymentMethod,
       },
       payment_intent_data: {
+        receipt_email: billing.email,
         metadata: {
           orderId: order.id,
           userId: session.user.id,
+          billingEmail: billing.email,
         },
       },
       success_url: `${appUrl}/account?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/cart?checkout=cancelled`,
+      cancel_url: `${appUrl}/checkout?checkout=cancelled`,
     }, {
       idempotencyKey: `checkout-session:${order.id}`,
     });

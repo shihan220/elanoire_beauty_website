@@ -16,6 +16,14 @@ export const adminProductSchema = z.object({
 
 export const partialAdminProductSchema = adminProductSchema.partial();
 
+export const adminNewsletterSchema = z.object({
+  email: z.string().trim().email('Enter a valid subscriber email address.'),
+  source: z.string().trim().min(2, 'Enter a newsletter source.'),
+  status: z.enum(['Active', 'Paused']),
+});
+
+export const partialAdminNewsletterSchema = adminNewsletterSchema.partial();
+
 export function formatAdminValidationErrors(error: z.ZodError) {
   return error.issues.reduce<Record<string, string>>((errors, issue) => {
     const key = issue.path.join('.');

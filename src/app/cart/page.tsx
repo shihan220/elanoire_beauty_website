@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
 import { Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
@@ -16,31 +15,6 @@ function formatCurrency(value: number) {
 
 export default function CartPage() {
   const { items, subtotal, totalItems, updateQuantity, removeItem, clearCart } = useCart();
-  const [checkoutError, setCheckoutError] = useState('');
-  const [isCheckingOut, setIsCheckingOut] = useState(false);
-
-  async function handleCheckout() {
-    setCheckoutError('');
-    setIsCheckingOut(true);
-
-    try {
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-      });
-      const body = (await response.json().catch(() => ({}))) as { message?: string; url?: string };
-
-      if (!response.ok || !body.url) {
-        setCheckoutError(body.message ?? 'Checkout could not be started. Please try again.');
-        return;
-      }
-
-      window.location.href = body.url;
-    } catch {
-      setCheckoutError('Checkout could not be started. Please try again.');
-    } finally {
-      setIsCheckingOut(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-[#faf9f6] text-stone-900 font-sans antialiased selection:bg-stone-900 selection:text-[#faf9f6]">
@@ -163,19 +137,12 @@ export default function CartPage() {
                   <span className="text-xs tracking-[0.2em] uppercase text-stone-500">Total</span>
                   <span className="text-2xl font-serif text-stone-900">{formatCurrency(subtotal)}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleCheckout}
-                  disabled={isCheckingOut}
-                  className="w-full bg-stone-900 text-[#faf9f6] py-4 px-8 text-sm tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors"
+                <Link
+                  href="/checkout"
+                  className="block w-full bg-stone-900 text-[#faf9f6] py-4 px-8 text-center text-sm tracking-[0.2em] uppercase hover:bg-stone-700 transition-colors"
                 >
-                  {isCheckingOut ? 'Opening Checkout' : 'Checkout'}
-                </button>
-                {checkoutError ? (
-                  <p className="text-sm text-stone-600 font-light leading-relaxed mt-5" role="alert">
-                    {checkoutError}
-                  </p>
-                ) : null}
+                  Checkout
+                </Link>
                 <button
                   type="button"
                   onClick={clearCart}
@@ -184,7 +151,7 @@ export default function CartPage() {
                   Clear Bag
                 </button>
                 <p className="text-sm text-stone-500 font-light leading-relaxed mt-8">
-                  Checkout opens a secure Stripe session once payment keys are configured.
+                  Checkout opens a billing review before secure card payment through Stripe.
                 </p>
               </aside>
             </div>
