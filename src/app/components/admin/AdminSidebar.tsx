@@ -5,6 +5,7 @@ const navigationItems = [
   { href: '#overview', label: 'Overview' },
   { href: '#stock', label: 'Stock Updates' },
   { href: '#sales', label: 'Sales Statistics' },
+  { href: '#customers', label: 'Customer Orders' },
   { href: '#newsletter', label: 'Newsletter Updates' },
   { href: '#products', label: 'Product Management' },
 ];

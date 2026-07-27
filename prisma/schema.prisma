@@ -25,6 +25,11 @@ enum AuthChallengePurpose {
   SIGN_IN
 }
 
+enum NewsletterStatus {
+  ACTIVE
+  PAUSED
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -138,4 +143,15 @@ model OrderItem {
   quantity   Int
   order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+}
+
+model NewsletterSubscription {
+  id           String           @id @default(cuid())
+  email        String           @unique
+  source       String
+  status       NewsletterStatus @default(ACTIVE)
+  subscribedAt DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([status, subscribedAt])
 }

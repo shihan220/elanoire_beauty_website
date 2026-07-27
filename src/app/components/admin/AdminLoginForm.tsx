@@ -140,12 +140,20 @@ export function AdminLoginForm({ credentialHint }: { credentialHint: LoginHint }
         <p className="text-sm text-stone-600 font-light leading-relaxed">
           Replace this credential gate with real admin roles before production.
         </p>
-        <Link
-          href="/"
-          className="text-xs tracking-[0.22em] uppercase text-stone-900 border-b border-stone-900 pb-1 hover:text-stone-500 hover:border-stone-500 transition-colors w-max"
-        >
-          Back to Storefront
-        </Link>
+        <div className="flex flex-wrap items-center gap-5">
+          <Link
+            href="/admin/forgot-password"
+            className="text-xs tracking-[0.22em] uppercase text-stone-900 border-b border-stone-900 pb-1 hover:text-stone-500 hover:border-stone-500 transition-colors w-max"
+          >
+            Forgot Password
+          </Link>
+          <Link
+            href="/"
+            className="text-xs tracking-[0.22em] uppercase text-stone-900 border-b border-stone-900 pb-1 hover:text-stone-500 hover:border-stone-500 transition-colors w-max"
+          >
+            Back to Storefront
+          </Link>
+        </div>
       </div>
     </div>
   );

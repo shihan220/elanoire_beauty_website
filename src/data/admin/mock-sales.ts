@@ -3,6 +3,12 @@ import type { AdminSalesSnapshot } from '@/types/admin';
 export const mockSalesSnapshot: AdminSalesSnapshot = {
   totalRevenuePence: 184300,
   totalOrders: 42,
+  periodTotals: {
+    dailyRevenuePence: 6500,
+    weeklyRevenuePence: 28600,
+    monthlyRevenuePence: 121400,
+    yearlyRevenuePence: 184300,
+  },
   last7DaysRevenuePence: 28600,
   last30DaysRevenuePence: 121400,
   bestSellers: [

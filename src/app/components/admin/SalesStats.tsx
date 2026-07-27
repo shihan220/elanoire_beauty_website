@@ -1,11 +1,35 @@
 import type { AdminSalesSnapshot } from '@/types/admin';
 import { formatCurrencyFromPence, formatDateLabel } from './admin-helpers';
+import { StatsCard } from './StatsCard';
 
 export function SalesStats({ sales }: { sales: AdminSalesSnapshot }) {
   const highestRevenue = Math.max(...sales.salesSeries.map((entry) => entry.revenuePence), 1);
 
   return (
     <div className="space-y-8">
+      <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-6">
+        <StatsCard
+          label="Daily Sales"
+          value={formatCurrencyFromPence(sales.periodTotals.dailyRevenuePence)}
+          hint="Revenue captured from completed orders today."
+        />
+        <StatsCard
+          label="Weekly Sales"
+          value={formatCurrencyFromPence(sales.periodTotals.weeklyRevenuePence)}
+          hint="Completed order revenue from the current seven-day window."
+        />
+        <StatsCard
+          label="Monthly Sales"
+          value={formatCurrencyFromPence(sales.periodTotals.monthlyRevenuePence)}
+          hint="Completed order revenue from the current thirty-day window."
+        />
+        <StatsCard
+          label="Yearly Sales"
+          value={formatCurrencyFromPence(sales.periodTotals.yearlyRevenuePence)}
+          hint="Completed order revenue since the start of the year."
+        />
+      </section>
+
       <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-8">
         <section className="border border-stone-200 bg-white/80 p-6 md:p-8">
           <div className="flex items-end justify-between gap-6 mb-8">
